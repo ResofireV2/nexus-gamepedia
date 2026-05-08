@@ -548,3 +548,578 @@
   }
 
 })();
+
+// =============================================================================
+// Admin Panel
+// =============================================================================
+
+(function () {
+  "use strict";
+
+  const BASE = "/gamepedia/api";
+
+  function apiFetch(path, opts = {}) {
+    return fetch(BASE + path, {
+      headers: { "Content-Type": "application/json", ...opts.headers },
+      ...opts,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    }).then(r => r.json());
+  }
+
+  // ── AdminPanel ──────────────────────────────────────────────────────────────
+
+  function AdminPanel({ currentUser, navigate }) {
+    const React = window.React;
+    const { useState, useEffect } = React;
+
+    const [tab,           setTab]          = useState("games");
+    const [games,         setGames]         = useState([]);
+    const [gamesLoading,  setGamesLoading]  = useState(true);
+    const [gamesError,    setGamesError]    = useState(null);
+    const [totalGames,    setTotalGames]    = useState(0);
+    const [hasMore,       setHasMore]       = useState(false);
+    const [currentPage,   setCurrentPage]   = useState(1);
+    const [search,        setSearch]        = useState("");
+    const [searchInput,   setSearchInput]   = useState("");
+    const [genre,         setGenre]         = useState("");
+    const [sort,          setSort]          = useState("newest");
+    const [filterGenres,  setFilterGenres]  = useState([]);
+    const [deleting,      setDeleting]      = useState({});
+    const [refreshing,    setRefreshing]    = useState({});
+    const [genres,        setGenres]        = useState([]);
+    const [genresLoading, setGenresLoading] = useState(true);
+    const [newGenreName,  setNewGenreName]  = useState("");
+    const [creatingGenre, setCreatingGenre] = useState(false);
+    const [stats,         setStats]         = useState(null);
+    const [statsLoading,  setStatsLoading]  = useState(false);
+    const [showAddModal,  setShowAddModal]  = useState(false);
+    const [showGenreModal,setShowGenreModal]= useState(null); // game to edit genres
+    const searchTimer = React.useRef(null);
+
+    const [clientId,     setClientId]     = useState(sessionStorage.getItem("gp_cid") || "");
+    const [clientSecret, setClientSecret] = useState(sessionStorage.getItem("gp_cs")  || "");
+
+    function getCreds() {
+      return { client_id: clientId, client_secret: clientSecret };
+    }
+    function saveCreds(id, secret) {
+      sessionStorage.setItem("gp_cid", id);
+      sessionStorage.setItem("gp_cs",  secret);
+    }
+
+    function loadGames(page, append) {
+      setGamesLoading(true);
+      if (!append) setGames([]);
+      const params = new URLSearchParams({ page: page || 1, sort });
+      if (search) params.set("search", search);
+      if (genre)  params.set("genre", genre);
+      apiFetch(`/admin/games?${params}`)
+        .then(r => {
+          setGamesLoading(false);
+          setGames(prev => append ? [...prev, ...(r.data || [])] : (r.data || []));
+          setTotalGames(r.meta?.total || 0);
+          setHasMore(r.meta?.has_more || false);
+          setCurrentPage(r.meta?.current_page || 1);
+          setFilterGenres(r.filters?.genres || []);
+        })
+        .catch(() => { setGamesLoading(false); setGamesError("Failed to load games."); });
+    }
+
+    function loadGenres() {
+      setGenresLoading(true);
+      apiFetch("/admin/genres")
+        .then(r => { setGenresLoading(false); setGenres(r.data || []); })
+        .catch(() => setGenresLoading(false));
+    }
+
+    function loadStats() {
+      if (statsLoading) return;
+      setStatsLoading(true);
+      apiFetch("/admin/stats")
+        .then(r => { setStats(r.data || null); setStatsLoading(false); })
+        .catch(() => setStatsLoading(false));
+    }
+
+    useEffect(() => { loadGames(1); loadGenres(); }, []);
+
+    function deleteGame(game) {
+      if (!confirm(`Delete "${game.name}"? This cannot be undone.`)) return;
+      setDeleting(p => ({ ...p, [game.id]: true }));
+      apiFetch(`/admin/games/${game.id}`, { method: "DELETE" })
+        .then(() => { setGames(p => p.filter(g => g.id !== game.id)); setTotalGames(p => p - 1); })
+        .catch(() => alert("Failed to delete game."))
+        .finally(() => setDeleting(p => ({ ...p, [game.id]: false })));
+    }
+
+    function refreshGame(game) {
+      const { client_id, client_secret } = getCreds();
+      if (!client_id) { alert("IGDB credentials not configured in extension settings."); return; }
+      setRefreshing(p => ({ ...p, [game.id]: true }));
+      apiFetch(`/admin/games/${game.id}/refresh`, { method: "POST", body: { client_id, client_secret } })
+        .then(r => {
+          if (r.data) setGames(p => p.map(g => g.id === game.id ? { ...g, ...r.data } : g));
+          alert(`${game.name} refreshed.`);
+        })
+        .catch(() => alert(`Failed to refresh ${game.name}.`))
+        .finally(() => setRefreshing(p => ({ ...p, [game.id]: false })));
+    }
+
+    function createGenre() {
+      const name = newGenreName.trim();
+      if (!name) return;
+      setCreatingGenre(true);
+      apiFetch("/admin/genres", { method: "POST", body: { name } })
+        .then(r => {
+          if (r.data) { setGenres(p => [...p, r.data].sort((a, b) => a.name.localeCompare(b.name))); setNewGenreName(""); }
+        })
+        .catch(() => alert("Failed to create genre."))
+        .finally(() => setCreatingGenre(false));
+    }
+
+    function deleteGenre(genre) {
+      if (!confirm(`Delete genre "${genre.name}"?`)) return;
+      apiFetch(`/admin/genres/${genre.id}`, { method: "DELETE" })
+        .then(() => setGenres(p => p.filter(g => g.id !== genre.id)))
+        .catch(() => alert("Failed to delete genre."));
+    }
+
+    const e = React.createElement;
+
+    return e("div", { className: "gp-admin" },
+
+      // Tabs
+      e("div", { className: "gp-admin-tabs" },
+        ["games", "genres", "stats"].map(t =>
+          e("button", {
+            key:       t,
+            className: "gp-admin-tab" + (tab === t ? " active" : ""),
+            onClick:   () => { setTab(t); if (t === "stats" && !stats) loadStats(); },
+          }, t === "games" ? "🎮 Games" : t === "genres" ? "🏷 Genres" : "📊 Stats")
+        )
+      ),
+
+      // ── Games tab ───────────────────────────────────────────────────────────
+      tab === "games" && e("div", { className: "gp-admin-content" },
+        !clientId && e("div", { className: "gp-creds-bar" },
+          e("i", { className: "fa-solid fa-key", style: { color: "var(--ac)", marginRight: 8 } }),
+          e("span", { style: { fontSize: 12, color: "var(--t3)", marginRight: 12 } }, "Enter IGDB credentials to import or refresh games:"),
+          e("input", { className: "gp-admin-search", type: "text", placeholder: "Client ID", style: { width: 160 },
+            value: clientId, onChange: ev => { setClientId(ev.target.value); saveCreds(ev.target.value, clientSecret); } }),
+          e("input", { className: "gp-admin-search", type: "password", placeholder: "Client Secret", style: { width: 180 },
+            value: clientSecret, onChange: ev => { setClientSecret(ev.target.value); saveCreds(clientId, ev.target.value); } })
+        ),
+        e("div", { className: "gp-admin-toolbar" },
+          e("div", { className: "gp-admin-filters" },
+            e("input", {
+              className:   "gp-admin-search",
+              type:        "text",
+              placeholder: "Search games…",
+              value:       searchInput,
+              onChange:    ev => {
+                setSearchInput(ev.target.value);
+                clearTimeout(searchTimer.current);
+                searchTimer.current = setTimeout(() => { setSearch(ev.target.value); loadGames(1); }, 400);
+              },
+            }),
+            e("select", {
+              className: "gp-admin-select",
+              value:     genre,
+              onChange:  ev => { setGenre(ev.target.value); loadGames(1); },
+            },
+              e("option", { value: "" }, "All Genres"),
+              filterGenres.map(g => e("option", { key: g.id, value: g.slug }, g.name))
+            ),
+            e("select", {
+              className: "gp-admin-select",
+              value:     sort,
+              onChange:  ev => { setSort(ev.target.value); loadGames(1); },
+            },
+              e("option", { value: "newest" }, "Newest Added"),
+              e("option", { value: "oldest" }, "Oldest Added"),
+              e("option", { value: "az"     }, "A → Z"),
+              e("option", { value: "za"     }, "Z → A")
+            )
+          ),
+          e("button", {
+            className: "gp-btn-primary",
+            onClick:   () => setShowAddModal(true),
+          }, "+ Add Game")
+        ),
+
+        !gamesLoading && e("p", { className: "gp-admin-count" }, `${totalGames} game${totalGames !== 1 ? "s" : ""}`),
+        gamesLoading && games.length === 0 && e("div", { className: "gp-loading" }, e("i", { className: "fa-solid fa-spinner fa-spin" }), " Loading…"),
+        gamesError && e("div", { className: "gp-error" }, gamesError),
+        !gamesLoading && games.length === 0 && !gamesError && e("p", { className: "gp-empty" }, "No games yet. Add one above."),
+
+        games.length > 0 && e("div", { className: "gp-admin-grid" },
+          games.map(game =>
+            e("div", { key: game.id, className: "gp-admin-card" },
+              game.cover_image_url
+                ? e("img", { className: "gp-admin-card-cover", src: game.cover_image_url, alt: game.name })
+                : e("div", { className: "gp-admin-card-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
+              e("div", { className: "gp-admin-card-info" },
+                e("div", { className: "gp-admin-card-name" }, game.name),
+                game.release_year && e("div", { className: "gp-admin-card-year" }, String(game.release_year)),
+                game.genres?.length > 0 && e("div", { className: "gp-admin-card-genres" },
+                  game.genres.map(g => e("span", { key: g.id, className: "gp-genre-tag" }, g.name))
+                )
+              ),
+              e("div", { className: "gp-admin-card-actions" },
+                e("button", { className: "gp-admin-btn", title: "Edit genres", onClick: () => setShowGenreModal(game) },
+                  e("i", { className: "fa-solid fa-tags" })
+                ),
+                e("button", {
+                  className: "gp-admin-btn",
+                  title:     "Refresh from IGDB",
+                  disabled:  !!refreshing[game.id],
+                  onClick:   () => refreshGame(game),
+                }, e("i", { className: refreshing[game.id] ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-sync" })),
+                e("button", {
+                  className: "gp-admin-btn gp-admin-btn-danger",
+                  title:     "Delete",
+                  disabled:  !!deleting[game.id],
+                  onClick:   () => deleteGame(game),
+                }, e("i", { className: deleting[game.id] ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-trash" }))
+              )
+            )
+          )
+        ),
+
+        hasMore && e("div", { style: { textAlign: "center", padding: "16px 0" } },
+          e("button", { className: "gp-btn", onClick: () => loadGames(currentPage + 1, true) }, "Load more")
+        )
+      ),
+
+      // ── Genres tab ──────────────────────────────────────────────────────────
+      tab === "genres" && e("div", { className: "gp-admin-content" },
+        e("div", { className: "gp-genre-create" },
+          e("input", {
+            className:   "gp-admin-search",
+            type:        "text",
+            placeholder: "New genre name…",
+            value:       newGenreName,
+            onChange:    ev => setNewGenreName(ev.target.value),
+            onKeyDown:   ev => { if (ev.key === "Enter") createGenre(); },
+          }),
+          e("button", {
+            className: "gp-btn-primary",
+            disabled:  !newGenreName.trim() || creatingGenre,
+            onClick:   createGenre,
+          }, creatingGenre ? "Adding…" : "+ Add Genre")
+        ),
+        genresLoading && e("div", { className: "gp-loading" }, e("i", { className: "fa-solid fa-spinner fa-spin" }), " Loading…"),
+        !genresLoading && genres.length === 0 && e("p", { className: "gp-empty" }, "No genres yet."),
+        !genresLoading && genres.length > 0 && e("div", { className: "gp-genre-list" },
+          genres.map(g =>
+            e("div", { key: g.id, className: "gp-genre-row" },
+              e("span", { className: "gp-genre-row-name" }, g.name),
+              e("button", {
+                className: "gp-admin-btn gp-admin-btn-danger",
+                title:     "Delete",
+                onClick:   () => deleteGenre(g),
+              }, e("i", { className: "fa-solid fa-trash" }))
+            )
+          )
+        )
+      ),
+
+      // ── Stats tab ───────────────────────────────────────────────────────────
+      tab === "stats" && e("div", { className: "gp-admin-content" },
+        statsLoading && e("div", { className: "gp-loading" }, e("i", { className: "fa-solid fa-spinner fa-spin" }), " Loading…"),
+        !statsLoading && !stats && e("p", { className: "gp-empty" }, "No stats yet."),
+        !statsLoading && stats && e("div", { className: "gp-stats" },
+          e("div", { className: "gp-stats-grid" },
+            [
+              { label: "Total Games",       value: stats.total_games },
+              { label: "Screenshots",       value: `${stats.total_screenshots} (~${stats.estimated_disk_mb} MB)` },
+              { label: "Gamelog Entries",   value: stats.total_gamelogs },
+              { label: "No Genre",          value: stats.games_no_genre,   warn: stats.games_no_genre > 0 },
+              { label: "No Cover",          value: stats.games_no_cover,   warn: stats.games_no_cover > 0 },
+            ].map(s =>
+              e("div", { key: s.label, className: "gp-stat-card" + (s.warn ? " warn" : "") },
+                e("div", { className: "gp-stat-value" }, String(s.value)),
+                e("div", { className: "gp-stat-label" }, s.label)
+              )
+            )
+          ),
+          stats.top_gamelog_games?.length > 0 && e("div", { className: "gp-stats-top" },
+            e("h4", null, "Most Gamelog'd"),
+            e("ol", { className: "gp-stats-top-list" },
+              stats.top_gamelog_games.map(g =>
+                e("li", { key: g.id },
+                  e("span", null, g.name),
+                  e("span", { className: "gp-stats-count" }, `${g.gamelog_count} users`)
+                )
+              )
+            )
+          ),
+          e("button", { className: "gp-btn", onClick: () => { setStats(null); loadStats(); } },
+            e("i", { className: "fa-solid fa-sync", style: { marginRight: 6 } }), "Refresh Stats"
+          )
+        )
+      ),
+
+      // ── Add Game Modal ──────────────────────────────────────────────────────
+      showAddModal && e(AddGameModal, {
+        getCreds,
+        onGameAdded: () => loadGames(1),
+        onClose:     () => setShowAddModal(false),
+        genres,
+        onGenresUpdate: updatedGenres => setGenres(updatedGenres),
+      }),
+
+      // ── Edit Genres Modal ───────────────────────────────────────────────────
+      showGenreModal && e(EditGenresModal, {
+        game:    showGenreModal,
+        genres,
+        onSaved: updatedGame => {
+          setGames(p => p.map(g => g.id === updatedGame.id ? updatedGame : g));
+          setShowGenreModal(null);
+        },
+        onClose: () => setShowGenreModal(null),
+      })
+    );
+  }
+
+  // ── AddGameModal ────────────────────────────────────────────────────────────
+
+  function AddGameModal({ getCreds, onGameAdded, onClose, genres, onGenresUpdate }) {
+    const React = window.React;
+    const { useState } = React;
+    const e = React.createElement;
+
+    const [query,   setQuery]   = useState("");
+    const [results, setResults] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error,   setError]   = useState(null);
+    const [adding,  setAdding]  = useState({});
+    const [added,   setAdded]   = useState({});
+    const searchTimer = React.useRef(null);
+
+    function doSearch(q) {
+      if (!q || q.length < 2) { setResults([]); return; }
+      const { client_id, client_secret } = getCreds();
+      if (!client_id) { setError("IGDB credentials not configured. Go to Settings → Extensions → Gamepedia."); return; }
+      setLoading(true); setError(null);
+      fetch(`/gamepedia/api/games/search?q=${encodeURIComponent(q)}&client_id=${encodeURIComponent(client_id)}&client_secret=${encodeURIComponent(client_secret)}`)
+        .then(r => r.json())
+        .then(r => { setLoading(false); setResults(r.data || []); setError(r.error || null); })
+        .catch(() => { setLoading(false); setError("Search failed."); });
+    }
+
+    function addGame(game) {
+      const { client_id, client_secret } = getCreds();
+      setAdding(p => ({ ...p, [game.igdb_id]: true }));
+      fetch("/gamepedia/api/admin/games/import", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ igdb_id: game.igdb_id, client_id, client_secret }),
+      })
+        .then(r => r.json())
+        .then(r => {
+          setAdding(p => ({ ...p, [game.igdb_id]: false }));
+          if (r.error) { setError(r.error); return; }
+          setAdded(p => ({ ...p, [game.igdb_id]: true }));
+          onGameAdded();
+        })
+        .catch(() => { setAdding(p => ({ ...p, [game.igdb_id]: false })); setError("Failed to add game."); });
+    }
+
+    return e("div", { className: "gp-modal-overlay", onMouseDown: ev => { if (ev.target === ev.currentTarget) onClose(); } },
+      e("div", { className: "gp-modal" },
+        e("div", { className: "gp-modal-header" },
+          e("span", { className: "gp-modal-title" }, "Add Game from IGDB"),
+          e("button", { className: "gp-modal-close", onClick: onClose }, "✕")
+        ),
+        e("input", {
+          className:   "gp-modal-search",
+          type:        "text",
+          placeholder: "Search IGDB…",
+          value:       query,
+          autoFocus:   true,
+          onChange:    ev => {
+            setQuery(ev.target.value);
+            clearTimeout(searchTimer.current);
+            searchTimer.current = setTimeout(() => doSearch(ev.target.value), 500);
+          },
+        }),
+        error && e("div", { className: "gp-modal-error" }, error),
+        loading && e("p", { className: "gp-modal-loading" }, e("i", { className: "fa-solid fa-spinner fa-spin" }), " Searching IGDB…"),
+        e("div", { className: "gp-modal-results" },
+          results.length === 0 && !loading && query.length >= 2 && e("p", { className: "gp-modal-empty" }, "No results."),
+          results.map(game =>
+            e("div", { key: game.igdb_id, className: "gp-import-row" },
+              game.cover_image_url
+                ? e("img", { className: "gp-import-cover", src: game.cover_image_url, alt: game.name })
+                : e("div", { className: "gp-import-nocover" }, "🎮"),
+              e("div", { className: "gp-import-info" },
+                e("strong", null, game.name),
+                game.release_year && e("span", { className: "gp-import-year" }, ` (${game.release_year})`),
+                game.developer && e("div", null, e("small", null, game.developer))
+              ),
+              e("div", { className: "gp-import-action" },
+                added[game.igdb_id]
+                  ? e("span", { className: "gp-import-done" }, e("i", { className: "fa-solid fa-check" }), " Added")
+                  : e("button", {
+                      className: "gp-btn-primary",
+                      disabled:  !!adding[game.igdb_id],
+                      onClick:   () => addGame(game),
+                    }, adding[game.igdb_id] ? "Adding…" : "Add Game")
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+
+  // ── EditGenresModal ─────────────────────────────────────────────────────────
+
+  function EditGenresModal({ game, genres, onSaved, onClose }) {
+    const React = window.React;
+    const { useState } = React;
+    const e = React.createElement;
+
+    const [selected, setSelected] = useState(new Set((game.genres || []).map(g => g.id)));
+    const [saving,   setSaving]   = useState(false);
+
+    function save() {
+      setSaving(true);
+      fetch(`/gamepedia/api/admin/games/${game.id}/genres`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ genre_ids: Array.from(selected) }),
+      })
+        .then(r => r.json())
+        .then(() => {
+          const updatedGenres = genres.filter(g => selected.has(g.id));
+          onSaved({ ...game, genres: updatedGenres });
+        })
+        .catch(() => alert("Failed to save genres."))
+        .finally(() => setSaving(false));
+    }
+
+    return e("div", { className: "gp-modal-overlay", onMouseDown: ev => { if (ev.target === ev.currentTarget) onClose(); } },
+      e("div", { className: "gp-modal gp-modal-sm" },
+        e("div", { className: "gp-modal-header" },
+          e("span", { className: "gp-modal-title" }, `Genres — ${game.name}`),
+          e("button", { className: "gp-modal-close", onClick: onClose }, "✕")
+        ),
+        e("div", { className: "gp-genre-checklist" },
+          genres.length === 0 && e("p", { className: "gp-modal-empty" }, "No genres yet. Create some in the Genres tab."),
+          genres.map(g =>
+            e("label", { key: g.id, className: "gp-genre-check-row" },
+              e("input", {
+                type:     "checkbox",
+                checked:  selected.has(g.id),
+                onChange: ev => {
+                  const next = new Set(selected);
+                  ev.target.checked ? next.add(g.id) : next.delete(g.id);
+                  setSelected(next);
+                },
+              }),
+              " ", g.name
+            )
+          )
+        ),
+        e("div", { className: "gp-modal-footer" },
+          e("button", { className: "gp-btn-primary", disabled: saving, onClick: save },
+            saving ? "Saving…" : "Save Genres"
+          )
+        )
+      )
+    );
+  }
+
+  // ── CSS ─────────────────────────────────────────────────────────────────────
+
+  const style = document.createElement("style");
+  style.textContent = `
+.gp-admin{padding:16px 0;}
+.gp-creds-bar{display:flex;align-items:center;gap:8px;background:rgba(167,139,250,.06);border:0.5px solid rgba(167,139,250,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;flex-wrap:wrap;}
+.gp-admin-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:0.5px solid rgba(255,255,255,.08);padding-bottom:0;}
+.gp-admin-tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--t3);cursor:pointer;font-size:13px;padding:8px 14px 10px;transition:color .12s,border-color .12s;}
+.gp-admin-tab:hover{color:var(--t1);}
+.gp-admin-tab.active{color:var(--ac);border-bottom-color:var(--ac);}
+.gp-admin-content{padding-top:4px;}
+.gp-admin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.gp-admin-filters{display:flex;gap:6px;flex-wrap:wrap;flex:1;}
+.gp-admin-search{flex:1;min-width:140px;padding:7px 10px;background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:8px;color:var(--t1);font-size:13px;outline:none;}
+.gp-admin-search::placeholder{color:var(--t4);}
+.gp-admin-select{padding:7px 10px;background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:8px;color:var(--t1);font-size:13px;outline:none;}
+.gp-admin-count{font-size:12px;color:var(--t4);margin-bottom:10px;}
+.gp-btn{background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:8px;color:var(--t2);cursor:pointer;font-size:13px;padding:7px 16px;transition:background .12s;}
+.gp-btn:hover{background:rgba(255,255,255,.13);}
+.gp-btn-primary{background:var(--ac);border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:13px;font-weight:500;padding:7px 16px;transition:opacity .12s;}
+.gp-btn-primary:hover{opacity:.88;}
+.gp-btn-primary:disabled{opacity:.4;cursor:default;}
+.gp-admin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.gp-admin-card{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;}
+.gp-admin-card-cover{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;}
+.gp-admin-card-nocover{width:100%;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;font-size:28px;color:rgba(255,255,255,.2);}
+.gp-admin-card-info{padding:8px 8px 4px;}
+.gp-admin-card-name{font-size:12px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-admin-card-year{font-size:11px;color:var(--t4);margin-top:1px;}
+.gp-admin-card-genres{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
+.gp-genre-tag{font-size:10px;background:rgba(167,139,250,.12);color:var(--ac);border-radius:4px;padding:2px 5px;}
+.gp-admin-card-actions{display:flex;gap:4px;padding:4px 6px 6px;}
+.gp-admin-btn{background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:6px;color:var(--t3);cursor:pointer;flex:1;font-size:11px;padding:5px;transition:background .12s,color .12s;}
+.gp-admin-btn:hover{background:rgba(255,255,255,.1);color:var(--t1);}
+.gp-admin-btn:disabled{opacity:.4;cursor:default;}
+.gp-admin-btn-danger:hover{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:#f87171;}
+.gp-genre-create{display:flex;gap:8px;margin-bottom:14px;}
+.gp-genre-list{display:flex;flex-direction:column;gap:6px;}
+.gp-genre-row{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;}
+.gp-genre-row-name{font-size:13px;color:var(--t1);}
+.gp-stats{padding-top:4px;}
+.gp-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px;}
+.gp-stat-card{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;}
+.gp-stat-card.warn{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.05);}
+.gp-stat-value{font-size:20px;font-weight:600;color:var(--t1);margin-bottom:4px;}
+.gp-stat-label{font-size:11px;color:var(--t4);}
+.gp-stats-top{margin-bottom:16px;}
+.gp-stats-top h4{font-size:13px;color:var(--t2);margin-bottom:8px;}
+.gp-stats-top-list{padding-left:18px;}
+.gp-stats-top-list li{display:flex;justify-content:space-between;font-size:13px;color:var(--t2);padding:3px 0;}
+.gp-stats-count{color:var(--t4);font-size:12px;}
+.gp-modal-error{font-size:12px;color:#f87171;padding:4px 16px;}
+.gp-import-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;transition:background .12s;}
+.gp-import-row:hover{background:rgba(255,255,255,.04);}
+.gp-import-cover{width:32px;height:44px;object-fit:cover;border-radius:4px;flex-shrink:0;}
+.gp-import-nocover{width:32px;height:44px;background:rgba(255,255,255,.06);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.gp-import-info{flex:1;min-width:0;}
+.gp-import-year{font-size:12px;color:var(--t4);}
+.gp-import-action{flex-shrink:0;}
+.gp-import-done{font-size:12px;color:#4ade80;}
+.gp-modal-footer{padding:12px 16px;border-top:0.5px solid rgba(255,255,255,.08);display:flex;justify-content:flex-end;}
+.gp-modal-sm{max-width:360px;}
+.gp-genre-checklist{padding:8px 16px;max-height:300px;overflow-y:auto;}
+.gp-genre-check-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;color:var(--t2);cursor:pointer;}
+`;
+  document.head.appendChild(style);
+
+  // ── Register admin panel route ───────────────────────────────────────────────
+  if (window.NexusExtensions) {
+    window.NexusExtensions.registerRoute("/gamepedia/admin", AdminPanel, { title: "Gamepedia Admin" });
+  }
+
+  // ── Register admin sidebar link ──────────────────────────────────────────────
+  function GamepediaAdminLink({ navigate }) {
+    const React = window.React;
+    if (!React) return null;
+    return React.createElement("button", {
+      className: "gp-profile-gamelog-link",
+      onClick:   () => navigate && navigate("ext-route", {
+        _match: window.NexusExtensions.matchRoute("/gamepedia/admin"),
+      }),
+    },
+      React.createElement("i", { className: "fa-solid fa-gamepad", style: { marginRight: 6 } }),
+      "Gamepedia"
+    );
+  }
+
+  if (window.NexusExtensions) {
+    window.NexusExtensions.registerSlot("admin_sidebar", GamepediaAdminLink, 90);
+  }
+
+})();

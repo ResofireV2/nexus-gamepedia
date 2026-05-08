@@ -98,3 +98,137 @@ defmodule GamepediaWeb.AdminGameController do
     end)
   end
 end
+
+  # ---------------------------------------------------------------------------
+  # GET /api/admin/games
+  # ---------------------------------------------------------------------------
+
+  def index(conn, params) do
+    search = params["search"] || ""
+    genre  = params["genre"]  || ""
+    sort   = params["sort"]   || "newest"
+    page   = max(1, parse_int(params["page"] || 1))
+    limit  = 16
+
+    import Ecto.Query
+    alias Gamepedia.Repo
+    alias Gamepedia.Games.Game
+
+    base =
+      from(g in Game,
+        left_join: gg in "gamepedia_game_genre", on: gg.game_id == g.id,
+        left_join: gen in "gamepedia_genres",    on: gen.id == gg.genre_id,
+        select: g,
+        distinct: true
+      )
+
+    base = if search != "", do: where(base, [g], ilike(g.name, ^"%#{search}%")), else: base
+    base = if genre  != "", do: where(base, [g, gg, gen], gen.slug == ^genre),   else: base
+
+    base = case sort do
+      "az"     -> order_by(base, [g], asc: g.name)
+      "za"     -> order_by(base, [g], desc: g.name)
+      "oldest" -> order_by(base, [g], asc: g.inserted_at)
+      _        -> order_by(base, [g], desc: g.inserted_at)
+    end
+
+    total  = Repo.aggregate(base, :count)
+    games  = base |> offset((^page - 1) * ^limit) |> limit(^limit) |> Repo.all()
+
+    genres = Repo.all(from g in "gamepedia_genres", order_by: g.name,
+                      select: %{id: g.id, name: g.name, slug: g.slug})
+
+    years =
+      Repo.all(from g in Game,
+        where: not is_nil(g.first_release_date),
+        select: g.first_release_date)
+      |> Enum.map(fn ts -> ts |> DateTime.from_unix!() |> Map.get(:year) end)
+      |> Enum.uniq()
+      |> Enum.sort(:desc)
+
+    json(conn, %{
+      data: Enum.map(games, &game_summary_with_genres/1),
+      meta: %{
+        total:        total,
+        per_page:     limit,
+        current_page: page,
+        has_more:     page * limit < total
+      },
+      filters: %{genres: genres, years: years}
+    })
+  end
+
+  # ---------------------------------------------------------------------------
+  # GET /api/admin/stats
+  # ---------------------------------------------------------------------------
+
+  def stats(conn, _params) do
+    import Ecto.Query
+    alias Gamepedia.Repo
+    alias Gamepedia.Games.Game
+
+    total_games       = Repo.aggregate(Game, :count)
+    total_screenshots = Repo.aggregate("gamepedia_screenshots", :count)
+    total_gamelogs    = Repo.aggregate("gamepedia_gamelogs", :count)
+    games_no_genre    = Repo.aggregate(
+      from(g in Game,
+        where: g.id not in subquery(
+          from(gg in "gamepedia_game_genre", select: gg.game_id)
+        )
+      ), :count)
+    games_no_cover = Repo.aggregate(from(g in Game, where: is_nil(g.cover_image_url)), :count)
+
+    top_games =
+      Repo.all(
+        from(g in Game,
+          join: gl in "gamepedia_gamelogs", on: gl.game_id == g.id,
+          group_by: [g.id, g.name],
+          order_by: [desc: count(gl.id)],
+          limit: 5,
+          select: %{id: g.id, name: g.name, gamelog_count: count(gl.id)}
+        )
+      )
+
+    json(conn, %{
+      data: %{
+        total_games:          total_games,
+        total_screenshots:    total_screenshots,
+        estimated_disk_mb:    Float.round(total_screenshots * 80 / 1024, 1),
+        games_no_genre:       games_no_genre,
+        games_no_cover:       games_no_cover,
+        total_gamelogs:       total_gamelogs,
+        top_gamelog_games:    top_games
+      }
+    })
+  end
+
+  # ---------------------------------------------------------------------------
+  # Private helpers (additions)
+  # ---------------------------------------------------------------------------
+
+  defp game_summary_with_genres(game) do
+    import Ecto.Query
+    alias Gamepedia.Repo
+
+    genres = Repo.all(
+      from(g in "gamepedia_genres",
+        join: gg in "gamepedia_game_genre", on: gg.genre_id == g.id,
+        where: gg.game_id == ^game.id,
+        select: %{id: g.id, name: g.name, slug: g.slug}
+      )
+    )
+
+    %{
+      id:              game.id,
+      igdb_id:         game.igdb_id,
+      name:            game.name,
+      slug:            game.slug,
+      cover_image_url: game.cover_image_url,
+      developer:       game.developer,
+      release_year:    release_year(game.first_release_date),
+      genres:          genres
+    }
+  end
+
+  defp release_year(nil), do: nil
+  defp release_year(ts),  do: ts |> DateTime.from_unix!() |> Map.get(:year)

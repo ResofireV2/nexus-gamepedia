@@ -35,11 +35,13 @@ defmodule GamepediaWeb.Router do
     post   "/gamelog/:game_id/playing",   GamelogController, :toggle_playing
     get    "/gamelog/:username",          GamelogController, :index
 
-    # Stage 2 — Admin game management
+    # Admin game management
+    get    "/admin/games",             AdminGameController, :index
     post   "/admin/games/import",      AdminGameController, :import
     post   "/admin/games/:id/refresh", AdminGameController, :refresh
     post   "/admin/games/:id/genres",  AdminGameController, :update_genres
     delete "/admin/games/:id",         AdminGameController, :delete
+    get    "/admin/stats",             AdminGameController, :stats
 
     # Stage 2 — Genre management
     get    "/admin/genres",     GenreController, :index
