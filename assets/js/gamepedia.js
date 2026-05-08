@@ -132,30 +132,6 @@
     doSearch("");
   }
 
-  // ── Composer toolbar button (React component) ─────────────────────────────
-  // Nexus calls: <GamepediaToolbarButton linkedGames={[]} setLinkedGames={fn} />
-
-  function GamepediaToolbarButton({ linkedGames, setLinkedGames }) {
-    const React = window.React;
-    if (!React) return null;
-
-    return React.createElement("button", {
-      className: "comp-tb-btn gp-toolbar-btn",
-      title:     "Link a game",
-      type:      "button",
-      onMouseDown: (e) => {
-        e.preventDefault();
-        createModal(
-          (game) => setLinkedGames((prev) => {
-            if (prev.some((g) => g.id === game.id)) return prev;
-            return [...prev, game];
-          }),
-          linkedGames
-        );
-      },
-    }, React.createElement("i", { className: "fa-solid fa-gamepad", style: { fontSize: 13 } }));
-  }
-
   // ── Post footer slot component (React component) ──────────────────────────
   // Nexus calls: <GamepediaPostGames postId={42} />
   // Fetches linked games for the post and renders game cards.
@@ -261,10 +237,25 @@
 
   // ── Register with Nexus ────────────────────────────────────────────────────
 
-  // Expose picker so the TB_BTNS gamepedia button can open it
-  window._gpOpenPicker = createModal;
-
   if (window.NexusExtensions) {
+    // Register toolbar button using config object — no React component needed
+    window.NexusExtensions.registerToolbarButton({
+      icon:    "fa-solid fa-gamepad",
+      tip:     "Link a game",
+      color:   "var(--ac)",
+      onClick: function(linkedGames, setLinkedGames) {
+        createModal(
+          function(game) {
+            setLinkedGames(function(prev) {
+              if (prev.some(function(g) { return g.id === game.id; })) return prev;
+              return prev.concat([game]);
+            });
+          },
+          linkedGames
+        );
+      },
+    }, 50);
+
     window.NexusExtensions.registerSlot("post_footer", GamepediaPostGames, 50);
   } else {
     console.warn("[Gamepedia] NexusExtensions not found — bundle loaded too early?");
