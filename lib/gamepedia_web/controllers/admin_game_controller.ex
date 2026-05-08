@@ -97,7 +97,6 @@ defmodule GamepediaWeb.AdminGameController do
       Enum.reduce(opts, msg, fn {k, v}, acc -> String.replace(acc, "%{#{k}}", to_string(v)) end)
     end)
   end
-end
 
   # ---------------------------------------------------------------------------
   # GET /api/admin/games
@@ -232,3 +231,4 @@ end
 
   defp release_year(nil), do: nil
   defp release_year(ts),  do: ts |> DateTime.from_unix!() |> Map.get(:year)
+end
