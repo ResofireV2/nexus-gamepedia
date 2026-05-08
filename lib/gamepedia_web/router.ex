@@ -29,6 +29,12 @@ defmodule GamepediaWeb.Router do
     post "/posts/:post_id/games", PostGameController, :create
     get  "/posts/:post_id/games", PostGameController, :index
 
+    # Stage 5 — Gamelog
+    post   "/gamelog",                    GamelogController, :add
+    delete "/gamelog/:game_id",           GamelogController, :remove
+    post   "/gamelog/:game_id/playing",   GamelogController, :toggle_playing
+    get    "/gamelog/:username",          GamelogController, :index
+
     # Stage 2 — Admin game management
     post   "/admin/games/import",      AdminGameController, :import
     post   "/admin/games/:id/refresh", AdminGameController, :refresh
