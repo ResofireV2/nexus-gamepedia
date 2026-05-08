@@ -1,0 +1,34 @@
+FROM elixir:1.17-alpine AS build
+
+RUN apk add --no-cache build-base git openssl
+
+WORKDIR /app
+
+RUN mix local.hex --force && mix local.rebar --force
+
+COPY mix.exs mix.lock* ./
+COPY config/ ./config/
+
+ENV MIX_ENV=prod
+
+RUN mix deps.get --only prod
+RUN mix deps.compile
+
+COPY priv/ ./priv/
+COPY lib/ ./lib/
+
+RUN mix compile
+RUN mix release
+
+# Runtime image
+FROM elixir:1.17-alpine
+
+RUN apk add --no-cache openssl ncurses-libs libstdc++
+
+WORKDIR /app
+
+COPY --from=build /app/_build/prod/rel/gamepedia ./
+
+ENV HOME=/app
+
+CMD ["sh", "-c", "bin/gamepedia eval 'Gamepedia.Release.migrate()' && bin/gamepedia start"]
