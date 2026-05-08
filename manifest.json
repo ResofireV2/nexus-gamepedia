@@ -1,0 +1,35 @@
+{
+  "name": "Gamepedia",
+  "slug": "gamepedia",
+  "version": "0.1.0",
+  "description": "A game database powered by IGDB. Browse games, link threads to games, track your gamelog.",
+  "author": "ResofireV2",
+  "homepage": "https://github.com/ResofireV2/nexus-gamepedia",
+  "webhook_url": null,
+  "js_bundle_url": null,
+  "hooks": [],
+  "slots": [],
+  "settings_schema": {
+    "igdb_client_id": {
+      "type": "string",
+      "label": "IGDB Client ID",
+      "required": true,
+      "placeholder": "your_twitch_client_id"
+    },
+    "igdb_client_secret": {
+      "type": "string",
+      "label": "IGDB Client Secret",
+      "required": true,
+      "secret": true,
+      "placeholder": "your_twitch_client_secret"
+    }
+  },
+  "settings_tabs": [
+    {
+      "key": "credentials",
+      "label": "IGDB Credentials",
+      "icon": "fa-key",
+      "fields": ["igdb_client_id", "igdb_client_secret"]
+    }
+  ]
+}
