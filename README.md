@@ -70,23 +70,18 @@ Edit `manifest.json` and replace `gamepedia.billyrayfoss.com` with your actual d
 "js_bundle_url": "https://gamepedia.billyrayfoss.com/assets/gamepedia.js"
 ```
 
-### 2. Expose Gamepedia publicly via Caddy (or your reverse proxy)
+### 2. Add Gamepedia to your Caddyfile
 
-Add to your Caddyfile on the VPS:
-
-```
-gamepedia.billyrayfoss.com {
-    reverse_proxy localhost:4001
-}
-```
-
-Then reload Caddy:
+The repo includes a `Caddyfile` with the correct reverse proxy config. Append it to your existing Nexus Caddyfile on the VPS:
 
 ```bash
+cat /opt/gamepedia/Caddyfile >> /etc/caddy/Caddyfile
 caddy reload --config /etc/caddy/Caddyfile
 ```
 
-Verify the service is reachable from the public internet:
+Also add a DNS A record for `gamepedia.billyrayfoss.com` pointing to the same VPS IP as `billyrayfoss.com`. Caddy handles TLS automatically once DNS propagates.
+
+Verify the service is reachable:
 
 ```bash
 curl https://gamepedia.billyrayfoss.com/api/health
