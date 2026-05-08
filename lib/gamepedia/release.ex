@@ -5,6 +5,13 @@ defmodule Gamepedia.Release do
     load_app()
 
     for repo <- repos() do
+      # Create the database if it doesn't exist yet
+      case repo.__adapter__().storage_up(repo.config()) do
+        :ok -> :ok
+        {:error, :already_up} -> :ok
+        {:error, reason} -> raise "Could not create database: #{inspect(reason)}"
+      end
+
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
     end
   end
