@@ -261,8 +261,10 @@
 
   // ── Register with Nexus ────────────────────────────────────────────────────
 
+  // Expose picker so the TB_BTNS gamepedia button can open it
+  window._gpOpenPicker = createModal;
+
   if (window.NexusExtensions) {
-    window.NexusExtensions.registerToolbarButton(GamepediaToolbarButton, 50);
     window.NexusExtensions.registerSlot("post_footer", GamepediaPostGames, 50);
   } else {
     console.warn("[Gamepedia] NexusExtensions not found — bundle loaded too early?");
