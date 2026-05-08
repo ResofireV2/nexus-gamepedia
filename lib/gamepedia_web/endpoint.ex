@@ -4,6 +4,13 @@ defmodule GamepediaWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
+  # Serve static assets from priv/static — this is where the JS bundle lives.
+  plug Plug.Static,
+    at: "/assets",
+    from: {:gamepedia, "priv/static/assets"},
+    gzip: true,
+    headers: %{"access-control-allow-origin" => "*"}
+
   # Must come before Plug.Parsers so the raw body is still available for
   # webhook HMAC signature verification.
   plug GamepediaWeb.RawBodyPlug

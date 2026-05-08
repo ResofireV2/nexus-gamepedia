@@ -60,8 +60,9 @@ defmodule GamepediaWeb.WebhookController do
   end
 
   defp dispatch("post_deleted", payload, _settings) do
-    Logger.info("[Gamepedia] post_deleted — post_id=#{payload["post_id"]}")
-    # Stage 4: cascade-delete post_game links for this post.
+    post_id = payload["post_id"]
+    Logger.info("[Gamepedia] post_deleted — post_id=#{post_id}")
+    if post_id, do: Gamepedia.PostGames.delete_links_for_post(post_id)
     :ok
   end
 

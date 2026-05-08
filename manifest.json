@@ -8,13 +8,30 @@
   "webhook_url": "https://billyrayfoss.com/gamepedia/webhook",
   "js_bundle_url": "https://billyrayfoss.com/gamepedia/assets/gamepedia.js",
   "hooks": [
-    { "event": "post_created",  "priority": 50 },
-    { "event": "post_updated",  "priority": 50 },
-    { "event": "post_deleted",  "priority": 50 }
+    {
+      "event": "post_created",
+      "priority": 50
+    },
+    {
+      "event": "post_updated",
+      "priority": 50
+    },
+    {
+      "event": "post_deleted",
+      "priority": 50
+    }
   ],
   "slots": [
-    { "slot": "post_footer",   "component": "GamepediaPostGames", "priority": 50 },
-    { "slot": "admin_sidebar", "component": "GamepediaAdminLink",  "priority": 90 }
+    {
+      "slot": "post_footer",
+      "component": "GamepediaPostGames",
+      "priority": 50
+    },
+    {
+      "slot": "admin_sidebar",
+      "component": "GamepediaAdminLink",
+      "priority": 90
+    }
   ],
   "settings_schema": {
     "igdb_client_id": {
@@ -43,13 +60,18 @@
       "key": "credentials",
       "label": "IGDB Credentials",
       "icon": "fa-key",
-      "fields": ["igdb_client_id", "igdb_client_secret"]
+      "fields": [
+        "igdb_client_id",
+        "igdb_client_secret"
+      ]
     },
     {
       "key": "security",
       "label": "Security",
       "icon": "fa-shield",
-      "fields": ["webhook_secret"]
+      "fields": [
+        "webhook_secret"
+      ]
     }
   ]
 }
