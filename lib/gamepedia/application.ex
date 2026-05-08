@@ -3,6 +3,9 @@ defmodule Gamepedia.Application do
 
   @impl true
   def start(_type, _args) do
+    # Initialise ETS table for IGDB token caching before any workers start
+    Gamepedia.Igdb.init_cache()
+
     children = [
       Gamepedia.Repo,
       {Phoenix.PubSub, name: Gamepedia.PubSub},
