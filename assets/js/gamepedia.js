@@ -285,9 +285,11 @@
   // Registered in the profile_sidebar slot so it shows as a profile tab link,
   // and as a full page via a custom route handler on the nav_bottom slot.
 
-  function GamelogPage({ username, currentUserId }) {
+  function GamelogPage({ username, currentUser, navigate }) {
     const React = window.React;
     const { useState, useEffect } = React;
+
+    const currentUserId = currentUser?.id || null;
 
     const [data,        setData]        = useState(null);
     const [loading,     setLoading]     = useState(true);
@@ -480,15 +482,16 @@
 
   // ── Profile sidebar slot — renders a Gamelog link on user profiles ──────────
 
-  function GamelogProfileLink({ username }) {
+  function GamelogProfileLink({ username, navigate }) {
     const React = window.React;
     if (!React || !username) return null;
 
-    return React.createElement("a", {
-      href:      `/gamepedia/users/${username}`,
+    return React.createElement("button", {
       className: "gp-profile-gamelog-link",
-      target:    "_blank",
-      rel:       "noopener",
+      onClick:   () => navigate && navigate("ext-route", {
+        _match: window.NexusExtensions.matchRoute(`/gamepedia/users/${username}`),
+        username,
+      }),
     },
       React.createElement("i", { className: "fa-solid fa-bookmark", style: { marginRight: 6 } }),
       "Gamelog"
@@ -538,12 +541,10 @@
 `;
   document.head.appendChild(style);
 
-  // ── Register profile_sidebar slot ───────────────────────────────────────────
+  // ── Register route and profile sidebar link ────────────────────────────────
   if (window.NexusExtensions) {
+    window.NexusExtensions.registerRoute("/gamepedia/users/:username", GamelogPage, { title: "Gamelog" });
     window.NexusExtensions.registerSlot("profile_sidebar", GamelogProfileLink, 50);
   }
-
-  // ── Expose GamelogPage globally for direct embedding ────────────────────────
-  window.GamepediaGamelogPage = GamelogPage;
 
 })();
