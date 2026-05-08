@@ -5,6 +5,13 @@ defmodule GamepediaWeb.Router do
     plug :accepts, ["json"]
   end
 
+  scope "/", GamepediaWeb do
+    pipe_through :api
+
+    # Stage 3 — Nexus webhook receiver
+    post "/webhook", WebhookController, :handle
+  end
+
   scope "/api", GamepediaWeb do
     pipe_through :api
 

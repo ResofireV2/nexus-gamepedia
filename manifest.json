@@ -5,10 +5,17 @@
   "description": "A game database powered by IGDB. Browse games, link threads to games, track your gamelog.",
   "author": "ResofireV2",
   "homepage": "https://github.com/ResofireV2/nexus-gamepedia",
-  "webhook_url": null,
-  "js_bundle_url": null,
-  "hooks": [],
-  "slots": [],
+  "webhook_url": "https://gamepedia.billyrayfoss.com/webhook",
+  "js_bundle_url": "https://gamepedia.billyrayfoss.com/assets/gamepedia.js",
+  "hooks": [
+    { "event": "post_created",  "priority": 50 },
+    { "event": "post_updated",  "priority": 50 },
+    { "event": "post_deleted",  "priority": 50 }
+  ],
+  "slots": [
+    { "slot": "post_footer",   "component": "GamepediaPostGames", "priority": 50 },
+    { "slot": "admin_sidebar", "component": "GamepediaAdminLink",  "priority": 90 }
+  ],
   "settings_schema": {
     "igdb_client_id": {
       "type": "string",
@@ -22,6 +29,13 @@
       "required": true,
       "secret": true,
       "placeholder": "your_twitch_client_secret"
+    },
+    "webhook_secret": {
+      "type": "string",
+      "label": "Webhook Secret",
+      "required": false,
+      "secret": true,
+      "placeholder": "optional shared secret for signature verification"
     }
   },
   "settings_tabs": [
@@ -30,6 +44,12 @@
       "label": "IGDB Credentials",
       "icon": "fa-key",
       "fields": ["igdb_client_id", "igdb_client_secret"]
+    },
+    {
+      "key": "security",
+      "label": "Security",
+      "icon": "fa-shield",
+      "fields": ["webhook_secret"]
     }
   ]
 }
