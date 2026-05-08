@@ -6,7 +6,6 @@ A game database extension for Nexus powered by IGDB.
 
 - A free [Twitch Developer](https://dev.twitch.tv) account for IGDB API access
 - Nexus already running on the same VPS
-- A domain (or subdomain) pointing to your VPS, e.g. `gamepedia.billyrayfoss.com`
 
 ---
 
@@ -61,44 +60,29 @@ curl http://localhost:4001/api/games/elden-ring
 
 ## Stage 3 — Nexus manifest + admin settings panel
 
-### 1. Update `manifest.json` with your real domain
+### 1. Add Gamepedia to your Caddyfile
 
-Edit `manifest.json` and replace `gamepedia.billyrayfoss.com` with your actual domain:
+The repo includes a `Caddyfile` snippet that proxies `/gamepedia/*` on your
+existing domain through to the Gamepedia service. No new subdomain or DNS
+changes needed.
 
-```json
-"webhook_url":  "https://gamepedia.billyrayfoss.com/webhook",
-"js_bundle_url": "https://gamepedia.billyrayfoss.com/assets/gamepedia.js"
-```
+Open `/etc/caddy/Caddyfile` on your VPS and paste the contents of this repo's
+`Caddyfile` **inside** the `billyrayfoss.com { }` block, before the closing brace.
 
-### 2. Add Gamepedia to your Caddyfile
-
-The repo includes a `Caddyfile` with the correct reverse proxy config. Append it to your existing Nexus Caddyfile on the VPS:
+Then reload Caddy:
 
 ```bash
-cat /opt/gamepedia/Caddyfile >> /etc/caddy/Caddyfile
 caddy reload --config /etc/caddy/Caddyfile
 ```
 
-Also add a DNS A record for `gamepedia.billyrayfoss.com` pointing to the same VPS IP as `billyrayfoss.com`. Caddy handles TLS automatically once DNS propagates.
-
-Verify the service is reachable:
+Verify Gamepedia is publicly reachable through Nexus's domain:
 
 ```bash
-curl https://gamepedia.billyrayfoss.com/api/health
+curl https://billyrayfoss.com/gamepedia/api/health
 # Expected: {"status":"ok","service":"gamepedia","version":"0.1.0"}
 ```
 
-### 3. Push to GitHub
-
-Commit and push so Nexus can fetch `manifest.json` from the repo URL:
-
-```bash
-git add manifest.json
-git commit -m "stage 3: wire manifest webhook_url and js_bundle_url"
-git push
-```
-
-### 4. Install in Nexus
+### 2. Install the extension in Nexus
 
 In Nexus admin → Extensions → **Install from URL**, paste:
 
@@ -106,31 +90,29 @@ In Nexus admin → Extensions → **Install from URL**, paste:
 https://github.com/ResofireV2/nexus-gamepedia
 ```
 
-Nexus fetches `manifest.json` from the repo, installs the extension, and
-shows it in the Extensions list.
+Nexus fetches `manifest.json` from the repo and installs the extension.
 
-### 5. Configure IGDB credentials
+### 3. Configure IGDB credentials
 
-Admin → Extensions → **Gamepedia** → Settings tab → enter Client ID and Secret → Save.
+Admin → Extensions → **Gamepedia** → Settings → enter your Client ID and Secret → Save.
 
-### 6. Test the webhook
+### 4. Test the webhook
 
-Create a post on your forum. The Gamepedia service should log:
+Create a post on your forum. Check the Gamepedia logs:
 
+```bash
+cd /opt/gamepedia && docker compose -f docker-compose.prod.yml logs gamepedia --tail 20
+```
+
+You should see:
 ```
 [Gamepedia] post_created — post_id=<id>
 ```
 
-Check with:
+Or test manually:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs gamepedia --tail 20
-```
-
-Or test manually with curl:
-
-```bash
-curl -X POST https://gamepedia.billyrayfoss.com/webhook \
+curl -X POST https://billyrayfoss.com/gamepedia/webhook \
   -H "Content-Type: application/json" \
   -d '{"event":"post_created","payload":{"post_id":1},"settings":{},"extension":"gamepedia","timestamp":0}'
 # Expected: {"ok":true}
@@ -139,8 +121,16 @@ curl -X POST https://gamepedia.billyrayfoss.com/webhook \
 ### Optional: Webhook signature verification
 
 In Nexus admin → Extensions → Gamepedia → Security tab, set a **Webhook Secret**.
-Nexus will sign every webhook delivery with `X-Nexus-Signature: sha256=<hex>`.
-Gamepedia verifies the signature and rejects requests that don't match.
+Nexus will sign every delivery with `X-Nexus-Signature: sha256=<hex>` and
+Gamepedia will reject requests that don't match.
+
+---
+
+## Pull and rebuild after updates
+
+```bash
+cd /opt/gamepedia && git pull && docker compose -f docker-compose.prod.yml up -d --build
+```
 
 ---
 

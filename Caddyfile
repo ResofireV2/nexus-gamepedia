@@ -1,23 +1,13 @@
-gamepedia.billyrayfoss.com {
+# Gamepedia path proxy — append this block to the existing Nexus Caddyfile,
+# INSIDE the billyrayfoss.com { } block, before the closing brace.
+#
+# It forwards all /gamepedia/* requests to the Gamepedia service on port 4001
+# and strips the /gamepedia prefix so the service sees clean paths.
+
+@gamepedia {
+    path /gamepedia/*
+}
+handle @gamepedia {
+    uri strip_prefix /gamepedia
     reverse_proxy localhost:4001
-
-    @websockets {
-        header Connection *Upgrade*
-        header Upgrade websocket
-    }
-    reverse_proxy @websockets localhost:4001
-
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "SAMEORIGIN"
-        Referrer-Policy "strict-origin-when-cross-origin"
-    }
-
-    @static {
-        path /assets/* /images/* /favicon.ico /robots.txt
-    }
-    header @static Cache-Control "public, max-age=31536000, immutable"
-
-    encode gzip
 }

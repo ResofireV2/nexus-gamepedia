@@ -5,8 +5,8 @@
   "description": "A game database powered by IGDB. Browse games, link threads to games, track your gamelog.",
   "author": "ResofireV2",
   "homepage": "https://github.com/ResofireV2/nexus-gamepedia",
-  "webhook_url": "https://gamepedia.billyrayfoss.com/webhook",
-  "js_bundle_url": "https://gamepedia.billyrayfoss.com/assets/gamepedia.js",
+  "webhook_url": "https://billyrayfoss.com/gamepedia/webhook",
+  "js_bundle_url": "https://billyrayfoss.com/gamepedia/assets/gamepedia.js",
   "hooks": [
     { "event": "post_created",  "priority": 50 },
     { "event": "post_updated",  "priority": 50 },
