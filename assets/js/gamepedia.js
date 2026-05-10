@@ -25,6 +25,34 @@
     return;
   }
 
+  // Patch history.pushState to strip non-serializable values (functions)
+  // from state objects before they reach the structured clone algorithm.
+  // This allows ext-route _match objects containing React components to work.
+  (function() {
+    const orig = window.history.pushState.bind(window.history);
+    window.history.pushState = function(state, title, url) {
+      try {
+        // Test if state is serializable
+        JSON.stringify(state);
+        return orig(state, title, url);
+      } catch(e) {
+        // Strip functions recursively
+        function sanitize(obj) {
+          if (obj === null || typeof obj !== "object") return obj;
+          if (Array.isArray(obj)) return obj.map(sanitize);
+          const out = {};
+          for (const k of Object.keys(obj)) {
+            if (typeof obj[k] !== "function") {
+              out[k] = sanitize(obj[k]);
+            }
+          }
+          return out;
+        }
+        return orig(sanitize(state), title, url);
+      }
+    };
+  })();
+
   const { useState, useEffect, useRef, useReducer } = React;
   const e = React.createElement;
 
@@ -1331,22 +1359,18 @@
   NE.registerRoute("/gamepedia/gamelog/:user_id", GamelogPage, { title: "Gamelog" });
   NE.registerRoute("/gamepedia/browse", GameBrowsePage, { title: "Gamepedia" });
 
-  // Explore sidebar item — Gamepedia
-  // For the explore item, strip the component function from the match object
-  // so pushState can serialize it. ExtensionRoutePage re-matches via the URL.
-  (function() {
-    const m = NE.matchRoute("/gamepedia/browse");
-    const safeMatch = m ? { pattern: m.pattern, params: m.params, options: m.options } : null;
-    NE.registerExploreItem({
-      id:       "gamepedia-browse",
-      label:    "Gamepedia",
-      icon:     "fa-gamepad",
-      page:     "ext-route",
-      props:    safeMatch ? { _match: safeMatch } : {},
-      authOnly: false,
-      priority: 60,
-    });
-  })();
+  // Explore sidebar item — use feed page with a marker prop
+  // The GameBrowsePage is rendered via the ext-route system when navigated to
+  // programmatically from within the SPA (not via URL bar refresh)
+  NE.registerExploreItem({
+    id:       "gamepedia-browse",
+    label:    "Gamepedia",
+    icon:     "fa-gamepad",
+    page:     "ext-route",
+    props:    NE.matchRoute("/gamepedia/browse") || {},
+    authOnly: false,
+    priority: 60,
+  });
 
   // Right sidebar widget — Now Playing
   NE.registerRightWidget({
