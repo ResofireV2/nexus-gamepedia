@@ -617,14 +617,15 @@
 
       // Tabs
       e("div", { className: "gp-admin-tabs" },
-        ["games", "genres", "stats"].map(t =>
+        ["games", "genres", "stats", "credentials"].map(t =>
           e("button", {
             key:       t,
             className: "gp-admin-tab" + (tab === t ? " active" : ""),
             onClick:   () => { setTab(t); if (t === "stats" && !stats) loadStats(); },
           },
-            t === "games"  ? "\uD83C\uDFAE Games"  :
-            t === "genres" ? "\uD83C\uDFF7 Genres" : "\uD83D\uDCCA Stats"
+            t === "games"       ? "\uD83C\uDFAE Games"       :
+            t === "genres"      ? "\uD83C\uDFF7 Genres"      :
+            t === "stats"       ? "\uD83D\uDCCA Stats"       : "\uD83D\uDD11 Credentials"
           )
         )
       ),
@@ -1331,15 +1332,21 @@
   NE.registerRoute("/gamepedia/browse", GameBrowsePage, { title: "Gamepedia" });
 
   // Explore sidebar item — Gamepedia
-  NE.registerExploreItem({
-    id:       "gamepedia-browse",
-    label:    "Gamepedia",
-    icon:     "fa-gamepad",
-    page:     "ext-route",
-    props:    NE.matchRoute("/gamepedia/browse") || {},
-    authOnly: false,
-    priority: 60,
-  });
+  // For the explore item, strip the component function from the match object
+  // so pushState can serialize it. ExtensionRoutePage re-matches via the URL.
+  (function() {
+    const m = NE.matchRoute("/gamepedia/browse");
+    const safeMatch = m ? { pattern: m.pattern, params: m.params, options: m.options } : null;
+    NE.registerExploreItem({
+      id:       "gamepedia-browse",
+      label:    "Gamepedia",
+      icon:     "fa-gamepad",
+      page:     "ext-route",
+      props:    safeMatch ? { _match: safeMatch } : {},
+      authOnly: false,
+      priority: 60,
+    });
+  })();
 
   // Right sidebar widget — Now Playing
   NE.registerRightWidget({
