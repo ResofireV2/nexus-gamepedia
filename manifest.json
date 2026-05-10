@@ -11,8 +11,8 @@
     "games",
     "integrations"
   ],
-  "webhook_url": "https://billyrayfoss.com/gamepedia/webhook",
-  "js_bundle_url": "https://billyrayfoss.com/gamepedia/assets/gamepedia.js",
+  "webhook_url": "http://localhost:4001/webhook",
+  "js_bundle_url": "https://billyrayfoss.com/api/v1/extensions/gamepedia/assets/gamepedia.js",
   "hooks": [
     {
       "event": "post_created",
