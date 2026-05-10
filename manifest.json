@@ -6,7 +6,7 @@
   "author": "ResofireV2",
   "homepage": "https://github.com/ResofireV2/nexus-gamepedia",
   "service_url": "http://172.18.0.1:4001",
-  "logo_url": "https://billyrayfoss.com/gamepedia/assets/logo.png",
+  "logo_url": "/api/v1/extensions/gamepedia/assets/logo.webp",
   "categories": [
     "games",
     "integrations"
@@ -94,5 +94,6 @@
         "webhook_secret"
       ]
     }
-  ]
+  ],
+  "banner_url": "/api/v1/extensions/gamepedia/assets/banner.webp"
 }
