@@ -56,6 +56,17 @@ defmodule Gamepedia.PostGames do
   # Delete all game links for a post (called on post_deleted webhook)
   # ---------------------------------------------------------------------------
 
+  # List post IDs linked to a game
+  def list_posts_for_game(game_id) do
+    from(pg in @post_game_table,
+      where: pg.game_id == ^game_id,
+      order_by: [desc: pg.post_id],
+      limit: 10,
+      select: pg.post_id
+    )
+    |> Repo.all()
+  end
+
   def delete_links_for_post(post_id) do
     from(pg in @post_game_table, where: pg.post_id == ^post_id)
     |> Repo.delete_all()

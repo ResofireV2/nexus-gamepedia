@@ -32,6 +32,7 @@ defmodule GamepediaWeb.Router do
     # Public — post game links
     post "/posts/:post_id/games", PostGameController, :create
     get  "/posts/:post_id/games", PostGameController, :index
+    get  "/games/:game_id/posts", PostGameController, :posts_for_game
 
     # Public — gamelog
     post   "/gamelog",                  GamelogController, :add

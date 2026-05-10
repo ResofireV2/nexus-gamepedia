@@ -39,6 +39,16 @@ defmodule GamepediaWeb.PostGameController do
   end
 
   # ---------------------------------------------------------------------------
+  # GET /api/games/:game_id/posts — list post_ids linked to a game
+  # Frontend fetches post details from Nexus API using these IDs
+  # ---------------------------------------------------------------------------
+
+  def posts_for_game(conn, %{"game_id" => game_id}) do
+    post_ids = PostGames.list_posts_for_game(parse_int(game_id))
+    json(conn, %{data: post_ids})
+  end
+
+  # ---------------------------------------------------------------------------
   # Private
   # ---------------------------------------------------------------------------
 
