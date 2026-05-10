@@ -1186,7 +1186,7 @@
     if (error) return e("div", { className: "gp-error" }, error);
     if (!game)  return null;
 
-    const heroUrl = game.screenshots?.[0]?.url?.replace("t_screenshot_big", "t_screenshot_huge") || null;
+    const heroUrl = game.screenshots?.[0]?.webp_url || game.screenshots?.[0]?.url?.replace("t_screenshot_big", "t_screenshot_huge") || null;
     const displayRating = hoverRating || userRating;
 
     return e("div", { className: "gp-detail" },
@@ -1335,21 +1335,22 @@
           )
         ),
 
-        // Screenshots
+        // Screenshots — webp thumbnails, lightbox opens full-size jpg
         game.screenshots?.length > 0 && e("div", { style: { marginBottom: 24 } },
           e("div", { className: "gp-detail-section-label" }, "Screenshots"),
           e("div", { className: "gp-detail-screenshots" },
-            game.screenshots.map((s, i) =>
-              e("a", {
+            game.screenshots.map((s, i) => {
+              const thumbSrc = s.webp_url || s.url;
+              const fullSrc  = s.jpg_url  || s.url?.replace("t_screenshot_big", "t_1080p") || s.url;
+              return e("div", {
                 key:       s.id || i,
-                href:      s.url?.replace("t_screenshot_big", "t_1080p") || s.url,
-                target:    "_blank",
-                rel:       "noopener noreferrer",
                 className: "gp-detail-shot",
+                style:     { cursor: "pointer" },
+                onClick:   () => { if (window._lbSetState) window._lbSetState({ src: fullSrc, originalSrc: fullSrc }); },
               },
-                e("img", { src: s.url, alt: `Screenshot ${i + 1}`, style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } })
-              )
-            )
+                e("img", { src: thumbSrc, alt: `Screenshot ${i + 1}`, style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } })
+              );
+            })
           )
         )
       )

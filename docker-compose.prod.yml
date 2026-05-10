@@ -11,6 +11,8 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       PORT: "4001"
       MIX_ENV: prod
+    volumes:
+      - /opt/gamepedia-data/screenshots:/app/screenshots
     ports:
       - "4001:4001"
     networks:

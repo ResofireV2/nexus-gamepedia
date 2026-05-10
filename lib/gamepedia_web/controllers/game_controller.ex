@@ -79,7 +79,14 @@ defmodule GamepediaWeb.GameController do
       first_release_date:  game.first_release_date,
       genres:              Enum.map(game.genres, &genre_map/1),
       screenshots:         Enum.map(game.screenshots, fn s ->
-        %{id: s.id, igdb_image_id: s.igdb_image_id, url: s.url, order: s.order}
+        %{
+          id:            s.id,
+          igdb_image_id: s.igdb_image_id,
+          url:           s.url,
+          webp_url:      Games.screenshot_url(s.webp_path),
+          jpg_url:       Games.screenshot_url(s.local_path),
+          order:         s.order
+        }
       end)
     }
   end

@@ -46,6 +46,9 @@ defmodule Gamepedia.MixProject do
       # HTTP client — for IGDB API calls
       {:req, "~> 0.5"},
 
+      # Image processing — WebP conversion for screenshots (uses libvips via vix)
+      {:image, "~> 0.54"},
+
       # JSON
       {:jason, "~> 1.4"},
 

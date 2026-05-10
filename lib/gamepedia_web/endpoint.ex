@@ -11,6 +11,12 @@ defmodule GamepediaWeb.Endpoint do
     gzip: true,
     headers: %{"access-control-allow-origin" => "*"}
 
+  # Serve locally stored game screenshots from the bind-mounted directory.
+  plug Plug.Static,
+    at: "/screenshots",
+    from: Application.compile_env(:gamepedia, :screenshots_dir, "/app/screenshots"),
+    gzip: false
+
   # Must come before Plug.Parsers so the raw body is still available for
   # webhook HMAC signature verification.
   plug GamepediaWeb.RawBodyPlug

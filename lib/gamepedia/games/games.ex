@@ -71,7 +71,9 @@ defmodule Gamepedia.Games do
             })
             |> Repo.update!()
 
-            # Delete old screenshots and save fresh ones
+            # Delete old screenshots (files + DB rows) and save fresh ones
+            old_screenshots = Repo.all(from s in Screenshot, where: s.game_id == ^game.id)
+            Enum.each(old_screenshots, &delete_screenshot_files/1)
             Repo.delete_all(from s in Screenshot, where: s.game_id == ^game.id)
             save_screenshots(game.id, data.screenshots)
 
@@ -83,11 +85,15 @@ defmodule Gamepedia.Games do
 
   @doc """
   Delete a game and all its associated data (screenshots cascade via FK).
+  Also removes screenshot files from disk.
   """
   def delete_game(id) do
     case get_game(id) do
       nil  -> {:error, :not_found}
-      game -> Repo.delete(game)
+      game ->
+        screenshots = Repo.all(from s in Screenshot, where: s.game_id == ^game.id)
+        Enum.each(screenshots, &delete_screenshot_files/1)
+        Repo.delete(game)
     end
   end
 
@@ -176,20 +182,75 @@ defmodule Gamepedia.Games do
   end
 
   # ---------------------------------------------------------------------------
+  # Screenshot storage
+  # ---------------------------------------------------------------------------
+
+  @screenshots_dir Application.compile_env(:gamepedia, :screenshots_dir, "/app/screenshots")
+
+  # Served at /screenshots/* via Plug.Static in the endpoint
+  @screenshots_url_prefix "/screenshots"
+
+  @doc """
+  Public URL for serving a screenshot file relative path.
+  e.g. "abc123.jpg" -> "/screenshots/abc123.jpg"
+  """
+  def screenshot_url(nil), do: nil
+  def screenshot_url(rel_path), do: "#{@screenshots_url_prefix}/#{rel_path}"
+
+  # ---------------------------------------------------------------------------
   # Private helpers
   # ---------------------------------------------------------------------------
 
   defp save_screenshots(game_id, screenshots) do
     for {s, idx} <- Enum.with_index(screenshots) do
+      {local_path, webp_path} = download_and_convert(s.igdb_image_id, s.url)
+
       %Screenshot{}
       |> Screenshot.changeset(%{
         game_id:       game_id,
         igdb_image_id: s.igdb_image_id,
         url:           s.url,
+        local_path:    local_path,
+        webp_path:     webp_path,
         order:         Map.get(s, :order, idx)
       })
       |> Repo.insert!()
     end
+  end
+
+  # Download the IGDB screenshot at full resolution (t_1080p), save as jpg,
+  # then convert to webp. Returns {local_rel_path, webp_rel_path} or {nil, nil}
+  # on failure (falls back to the original IGDB URL in the UI).
+  defp download_and_convert(image_id, igdb_url) do
+    # Use the highest quality IGDB size for the stored original
+    full_url = String.replace(igdb_url, "t_screenshot_big", "t_1080p")
+    filename = "#{image_id}.jpg"
+    webp_name = "#{image_id}.webp"
+
+    abs_dir = @screenshots_dir
+    abs_jpg = Path.join(abs_dir, filename)
+    abs_webp = Path.join(abs_dir, webp_name)
+
+    with :ok <- File.mkdir_p(abs_dir),
+         {:ok, %{status: 200, body: body}} <- Req.get(full_url, receive_timeout: 30_000),
+         :ok <- File.write(abs_jpg, body),
+         {:ok, image} <- Image.open(abs_jpg),
+         {:ok, {image, _}} <- Image.autorotate(image),
+         {:ok, _} <- Image.write(image, abs_webp, quality: 85, suffix: ".webp") do
+      {filename, webp_name}
+    else
+      err ->
+        require Logger
+        Logger.warning("Failed to download/convert screenshot #{image_id}: #{inspect(err)}")
+        {nil, nil}
+    end
+  end
+
+  defp delete_screenshot_files(%Screenshot{local_path: nil, webp_path: nil}), do: :ok
+  defp delete_screenshot_files(%Screenshot{local_path: local, webp_path: webp}) do
+    if local, do: File.rm(Path.join(@screenshots_dir, local))
+    if webp,  do: File.rm(Path.join(@screenshots_dir, webp))
+    :ok
   end
 
   defp apply_sort(query, "az"),     do: order_by(query, [g], asc:  g.name)
