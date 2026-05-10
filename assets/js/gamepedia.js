@@ -25,34 +25,56 @@
     return;
   }
 
-  // Patch history.pushState to strip non-serializable values (functions)
-  // from state objects before they reach the structured clone algorithm.
-  // This allows ext-route _match objects containing React components to work.
+  // Patch history.pushState to strip non-serializable values (functions, RegExp)
+  // so ext-route _match objects with React components don't throw DataCloneError.
   (function() {
     const orig = window.history.pushState.bind(window.history);
+    function sanitize(obj) {
+      if (obj === null) return obj;
+      if (typeof obj === "function" || obj instanceof RegExp) return undefined;
+      if (typeof obj !== "object") return obj;
+      if (Array.isArray(obj)) return obj.map(sanitize).filter(v => v !== undefined);
+      const out = {};
+      for (const k of Object.keys(obj)) {
+        const v = sanitize(obj[k]);
+        if (v !== undefined) out[k] = v;
+      }
+      return out;
+    }
     window.history.pushState = function(state, title, url) {
       try {
-        // Test if state is serializable
         JSON.stringify(state);
         return orig(state, title, url);
       } catch(e) {
-        // Strip functions recursively
-        function sanitize(obj) {
-          if (obj === null) return obj;
-          if (typeof obj === "function") return undefined;
-          if (obj instanceof RegExp) return undefined;
-          if (typeof obj !== "object") return obj;
-          if (Array.isArray(obj)) return obj.map(sanitize).filter(v => v !== undefined);
-          const out = {};
-          for (const k of Object.keys(obj)) {
-            const v = sanitize(obj[k]);
-            if (v !== undefined) out[k] = v;
-          }
-          return out;
-        }
         return orig(sanitize(state), title, url);
       }
     };
+  })();
+
+  // Patch _nexusNavigate to re-attach the component function to _match
+  // before Nexus renders ExtensionRoutePage. Without this, after pushState
+  // strips the component, the page shows an infinite loading spinner.
+  // We intercept navigate calls for ext-route and inject the live component.
+  (function() {
+    const pollInterval = setInterval(() => {
+      if (!window._nexusNavigate) return;
+      clearInterval(pollInterval);
+      const orig = window._nexusNavigate;
+      window._nexusNavigate = function(page, props) {
+        if (page === "ext-route" && props?._match && !props._match.component) {
+          const pattern = props._match.pattern;
+          if (pattern) {
+            // Reconstruct full URL from pattern + params, then re-match to get component
+            const url = NE.routeUrl(pattern, props);
+            const live = NE.matchRoute(url);
+            if (live?.component) {
+              props = { ...props, _match: live };
+            }
+          }
+        }
+        return orig(page, props);
+      };
+    }, 50);
   })();
 
   const { useState, useEffect, useRef, useReducer } = React;
