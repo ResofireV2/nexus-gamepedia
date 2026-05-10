@@ -7,14 +7,13 @@ defmodule Gamepedia.Gamelogs do
   alias Gamepedia.Repo
   alias Gamepedia.Games.Game
 
-  @table :gamepedia_gamelogs
+  @table "gamepedia_gamelogs"
 
   # ---------------------------------------------------------------------------
   # Add a game to a user's gamelog
   # ---------------------------------------------------------------------------
 
   def add(user_id, game_id) do
-    # Verify game exists
     unless Repo.get(Game, game_id) do
       {:error, :not_found}
     else
@@ -47,12 +46,15 @@ defmodule Gamepedia.Gamelogs do
   end
 
   # ---------------------------------------------------------------------------
-  # Toggle currently playing — sets this game, clears all others for the user
+  # Toggle currently playing
   # ---------------------------------------------------------------------------
 
   def toggle_playing(user_id, game_id) do
     entry =
-      from(g in @table, where: g.user_id == ^user_id and g.game_id == ^game_id)
+      from(g in @table,
+        where: g.user_id == ^user_id and g.game_id == ^game_id,
+        select: %{is_playing: g.is_playing}
+      )
       |> Repo.one()
 
     case entry do
@@ -62,11 +64,9 @@ defmodule Gamepedia.Gamelogs do
       entry ->
         now_playing = !entry.is_playing
 
-        # Clear is_playing on all user's gamelog entries
         from(g in @table, where: g.user_id == ^user_id)
         |> Repo.update_all(set: [is_playing: false])
 
-        # Set on this entry if marking (not unmarking)
         if now_playing do
           from(g in @table, where: g.user_id == ^user_id and g.game_id == ^game_id)
           |> Repo.update_all(set: [is_playing: true])
@@ -99,17 +99,17 @@ defmodule Gamepedia.Gamelogs do
     base =
       from(g in Game,
         join: gl in @table, on: gl.game_id == g.id,
-        join: u in "users", on: u.id == gl.user_id,
+        join: u in "users",  on: u.id == gl.user_id,
         where: u.username == ^username,
         select: %{
-          id:              g.id,
-          name:            g.name,
-          slug:            g.slug,
-          cover_image_url: g.cover_image_url,
+          id:                 g.id,
+          name:               g.name,
+          slug:               g.slug,
+          cover_image_url:    g.cover_image_url,
           first_release_date: g.first_release_date,
-          developer:       g.developer,
-          is_playing:      gl.is_playing,
-          inserted_at:     gl.inserted_at
+          developer:          g.developer,
+          is_playing:         gl.is_playing,
+          inserted_at:        gl.inserted_at
         }
       )
 
@@ -117,11 +117,15 @@ defmodule Gamepedia.Gamelogs do
     base = apply_genre_filter(base, genre)
     base = apply_sort(base, sort)
 
-    total  = Repo.aggregate(base, :count)
-    games  = base |> offset((^page - 1) * ^limit) |> limit(^limit) |> Repo.all()
+    total = Repo.aggregate(base, :count)
+    games = base |> offset((^page - 1) * ^limit) |> limit(^limit) |> Repo.all()
 
-    user = Repo.one(from u in "users", where: u.username == ^username,
-                    select: %{id: u.id, username: u.username})
+    user =
+      Repo.one(
+        from u in "users",
+          where: u.username == ^username,
+          select: %{id: u.id, username: u.username}
+      )
 
     genres = list_user_genres(user && user.id)
 
@@ -129,7 +133,7 @@ defmodule Gamepedia.Gamelogs do
   end
 
   # ---------------------------------------------------------------------------
-  # Stats for a user's gamelog (computed on page 1 only)
+  # Stats for a user's gamelog
   # ---------------------------------------------------------------------------
 
   def stats(user_id) do
@@ -147,23 +151,24 @@ defmodule Gamepedia.Gamelogs do
       )
       |> Repo.all()
 
-    now        = DateTime.utc_now()
-    month_ago  = DateTime.add(now, -30, :day)
-    total      = length(all)
-    added_this_month = Enum.count(all, fn g ->
-      g.inserted_at && DateTime.compare(g.inserted_at, month_ago) == :gt
-    end)
+    now       = DateTime.utc_now()
+    month_ago = DateTime.add(now, -30, :day)
+    total     = length(all)
 
-    playing = Enum.find(all, & &1.is_playing)
+    added_this_month =
+      Enum.count(all, fn g ->
+        g.inserted_at && DateTime.compare(g.inserted_at, month_ago) == :gt
+      end)
 
+    playing  = Enum.find(all, & &1.is_playing)
     with_date = Enum.filter(all, & &1.first_release_date)
-    oldest    = Enum.min_by(with_date, & &1.first_release_date, fn -> nil end)
-    newest    = Enum.max_by(with_date, & &1.first_release_date, fn -> nil end)
+    oldest   = Enum.min_by(with_date, & &1.first_release_date, fn -> nil end)
+    newest   = Enum.max_by(with_date, & &1.first_release_date, fn -> nil end)
 
     top_genre =
       from(g in "gamepedia_genres",
         join: gg in "gamepedia_game_genre", on: gg.genre_id == g.id,
-        join: gl in @table, on: gl.game_id == gg.game_id,
+        join: gl in @table,                 on: gl.game_id == gg.game_id,
         where: gl.user_id == ^user_id,
         group_by: [g.id, g.name],
         order_by: [desc: count(g.id)],
@@ -175,11 +180,14 @@ defmodule Gamepedia.Gamelogs do
     %{
       total:            total,
       added_this_month: added_this_month,
-      playing:          playing && %{id: playing.id, name: playing.name,
-                          release_year: release_year(playing.first_release_date)},
-      top_genre:        top_genre,
-      oldest:           oldest && %{name: oldest.name, year: release_year(oldest.first_release_date)},
-      newest:           newest && %{name: newest.name, year: release_year(newest.first_release_date)}
+      playing:          playing && %{
+        id:           playing.id,
+        name:         playing.name,
+        release_year: release_year(playing.first_release_date)
+      },
+      top_genre: top_genre,
+      oldest:    oldest && %{name: oldest.name, year: release_year(oldest.first_release_date)},
+      newest:    newest && %{name: newest.name, year: release_year(newest.first_release_date)}
     }
   end
 
@@ -207,7 +215,7 @@ defmodule Gamepedia.Gamelogs do
   defp list_user_genres(user_id) do
     from(g in "gamepedia_genres",
       join: gg in "gamepedia_game_genre", on: gg.genre_id == g.id,
-      join: gl in @table, on: gl.game_id == gg.game_id,
+      join: gl in @table,                 on: gl.game_id == gg.game_id,
       where: gl.user_id == ^user_id,
       distinct: true,
       order_by: g.name,

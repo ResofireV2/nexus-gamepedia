@@ -5,13 +5,13 @@
   "description": "A game database powered by IGDB. Browse games, link threads to games, track your gamelog.",
   "author": "ResofireV2",
   "homepage": "https://github.com/ResofireV2/nexus-gamepedia",
-  "service_url": "http://host.docker.internal:4001",
+  "service_url": "http://172.18.0.1:4001",
   "logo_url": "https://billyrayfoss.com/gamepedia/assets/logo.png",
   "categories": [
     "games",
     "integrations"
   ],
-  "webhook_url": "http://host.docker.internal:4001/webhook",
+  "webhook_url": "http://172.18.0.1:4001/webhook",
   "js_bundle_url": "https://billyrayfoss.com/api/v1/extensions/gamepedia/assets/gamepedia.js",
   "hooks": [
     {
