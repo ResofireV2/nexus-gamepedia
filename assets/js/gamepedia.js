@@ -218,7 +218,7 @@
               ev.preventDefault();
               if (window._nexusNavigate)
                 window._nexusNavigate("ext-route",
-                  NE.matchRoute(`/gamepedia/games/${game.slug}`) || {});
+                  { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`) });
             },
           },
             game.cover_image_url
@@ -248,7 +248,7 @@
       ev.preventDefault();
       if (window._nexusNavigate)
         window._nexusNavigate("ext-route",
-          NE.matchRoute(`/gamepedia/gamelog`) || {});
+          { _match: NE.matchRoute(`/gamepedia/gamelog/${currentUser?.id || ""}`) });
     }
     return e("a", {
       href:      "#",
@@ -399,7 +399,7 @@
                 ev.preventDefault();
                 if (window._nexusNavigate)
                   window._nexusNavigate("ext-route",
-                    NE.matchRoute(`/gamepedia/games/${game.slug}`) || {});
+                    { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`) });
               },
             },
               game.cover_image_url
@@ -476,7 +476,7 @@
           ev.preventDefault();
           if (window._nexusNavigate)
             window._nexusNavigate("ext-route",
-              NE.matchRoute(`/gamepedia/users/${currentUser.username}`) || {});
+              { _match: NE.matchRoute(`/gamepedia/gamelog/${currentUser.id}`) });
         },
       }, "Gamelog"),
       "."
@@ -488,7 +488,7 @@
       onClick:   () => {
         if (window._nexusNavigate)
           window._nexusNavigate("ext-route",
-            NE.matchRoute(`/gamepedia/games/${game.slug}`) || {});
+            { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`) });
       },
     },
       game.cover_image_url
@@ -1689,7 +1689,7 @@
       closeCard();
       if (window._nexusNavigate)
         window._nexusNavigate("ext-route",
-          NE.matchRoute(`/gamepedia/gamelog/${user.id}`) || {});
+          { _match: NE.matchRoute(`/gamepedia/gamelog/${user.id}`) });
     },
   });
 
@@ -1715,7 +1715,7 @@
     onClick({ n, navigate }) {
       if (window._nexusNavigate && n.data?.game_slug)
         window._nexusNavigate("ext-route",
-          NE.matchRoute(`/gamepedia/games/${n.data.game_slug}`) || {});
+          { _match: NE.matchRoute(`/gamepedia/games/${n.data.game_slug}`) });
     },
   });
 
