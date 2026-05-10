@@ -230,7 +230,7 @@
               ev.preventDefault();
               if (window._nexusNavigate)
                 window._nexusNavigate("ext-route",
-                  { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`), slug: game.slug });
+                  { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
             },
           },
             game.cover_image_url
@@ -260,7 +260,7 @@
       ev.preventDefault();
       if (window._nexusNavigate)
         window._nexusNavigate("ext-route",
-          { _match: NE.matchRoute(`/gamepedia/gamelog/${currentUser?.id || ""}`), user_id: currentUser?.id });
+          { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${currentUser?.id || ""}`), user_id: currentUser?.id });
     }
     return e("a", {
       href:      "#",
@@ -411,7 +411,7 @@
                 ev.preventDefault();
                 if (window._nexusNavigate)
                   window._nexusNavigate("ext-route",
-                    { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`), slug: game.slug });
+                    { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
               },
             },
               game.cover_image_url
@@ -488,7 +488,7 @@
           ev.preventDefault();
           if (window._nexusNavigate)
             window._nexusNavigate("ext-route",
-              { _match: NE.matchRoute(`/gamepedia/gamelog/${currentUser.id}`), user_id: currentUser.id });
+              { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${currentUser.id}`), user_id: currentUser.id });
         },
       }, "Gamelog"),
       "."
@@ -500,7 +500,7 @@
       onClick:   () => {
         if (window._nexusNavigate)
           window._nexusNavigate("ext-route",
-            { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`), slug: game.slug });
+            { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
       },
     },
       game.cover_image_url
@@ -1073,7 +1073,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Game Detail Page — /gamepedia/games/:slug
+  // Game Detail Page — /ext/gamepedia/games/:slug
   // ---------------------------------------------------------------------------
 
   function GameDetailPage({ slug, currentUser, navigate }) {
@@ -1349,8 +1349,8 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Game Browse Page — /gamepedia/browse  // ---------------------------------------------------------------------------
-  // Game Browse Page — /gamepedia/browse
+  // Game Browse Page — /ext/gamepedia/browse  // ---------------------------------------------------------------------------
+  // Game Browse Page — /ext/gamepedia/browse
   // ---------------------------------------------------------------------------
 
   function GameBrowsePage({ navigate, currentUser }) {
@@ -1438,7 +1438,7 @@
               ev.preventDefault();
               if (window._nexusNavigate)
                 window._nexusNavigate("ext-route",
-                  { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`), slug: game.slug });
+                  { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
             } },
               game.cover_image_url
                 ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-gl-card-cover" })
@@ -1681,9 +1681,9 @@
   NE.registerSlot("profile_sidebar", GamepediaGamelogLink, 50);
 
   // SPA route — gamelog page
-  NE.registerRoute("/gamepedia/gamelog/:user_id", GamelogPage, { title: "Gamelog" });
-  NE.registerRoute("/gamepedia/games/:slug", GameDetailPage, { title: "Gamepedia" });
-  NE.registerRoute("/gamepedia/browse", GameBrowsePage, { title: "Gamepedia" });
+  NE.registerRoute("/ext/gamepedia/gamelog/:user_id", GamelogPage, { title: "Gamelog" });
+  NE.registerRoute("/ext/gamepedia/games/:slug", GameDetailPage, { title: "Gamepedia" });
+  NE.registerRoute("/ext/gamepedia/browse", GameBrowsePage, { title: "Gamepedia" });
 
   // Explore sidebar item — use feed page with a marker prop
   // The GameBrowsePage is rendered via the ext-route system when navigated to
@@ -1693,7 +1693,7 @@
     label:    "Gamepedia",
     icon:     "fa-gamepad",
     page:     "ext-route",
-    props:    { _match: NE.matchRoute("/gamepedia/browse") },
+    props:    { _match: NE.matchRoute("/ext/gamepedia/browse") },
     authOnly: false,
     priority: 60,
   });
@@ -1717,7 +1717,7 @@
       closeCard();
       if (window._nexusNavigate)
         window._nexusNavigate("ext-route",
-          { _match: NE.matchRoute(`/gamepedia/gamelog/${user.id}`), user_id: user.id });
+          { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${user.id}`), user_id: user.id });
     },
   });
 
@@ -1743,7 +1743,7 @@
     onClick({ n, navigate }) {
       if (window._nexusNavigate && n.data?.game_slug)
         window._nexusNavigate("ext-route",
-          { _match: NE.matchRoute(`/gamepedia/games/${n.data.game_slug}`), slug: n.data.game_slug });
+          { _match: NE.matchRoute(`/ext/gamepedia/games/${n.data.game_slug}`), slug: n.data.game_slug });
     },
   });
 
