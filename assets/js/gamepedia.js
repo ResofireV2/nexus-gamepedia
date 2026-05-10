@@ -793,6 +793,58 @@
       ),
 
       // ── Add Game Modal ─────────────────────────────────────────────────────
+      // ── Credentials Tab ──────────────────────────────────────────────────────
+      tab === "credentials" && e("div", null,
+        e("p", { style: { fontSize: 12, color: "var(--t4)", marginBottom: 16 } },
+          "IGDB credentials are required to search and import games. Get them free at ",
+          e("a", { href: "https://dev.twitch.tv", target: "_blank", style: { color: "var(--ac)" } }, "dev.twitch.tv"), "."
+        ),
+        [
+          { key: "client_id",      label: "IGDB Client ID",     type: "text",     placeholder: "your_twitch_client_id" },
+          { key: "client_secret",  label: "IGDB Client Secret", type: "password", placeholder: "your_twitch_client_secret" },
+          { key: "webhook_secret", label: "Webhook Secret",     type: "password", placeholder: "optional — for webhook signature verification" },
+        ].map(field =>
+          e("div", { key: field.key, style: { marginBottom: 16 } },
+            e("label", { style: { fontSize: 12, color: "var(--t4)", display: "block", marginBottom: 6, fontWeight: 500 } }, field.label),
+            e("input", {
+              className:   "gp-input",
+              type:        field.type,
+              style:       { width: "100%" },
+              placeholder: field.placeholder,
+              value:       credInput[field.key],
+              onChange:    ev => setCredInput(p => ({ ...p, [field.key]: ev.target.value })),
+            })
+          )
+        ),
+        e("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
+          e("button", {
+            className: "gp-btn-primary",
+            disabled:  credSaving,
+            onClick:   () => {
+              setCredSaving(true); setCredSaved(false);
+              fetch("/api/v1/admin/extensions/gamepedia/settings", {
+                method: "PATCH",
+                headers: authHeaders(),
+                body: JSON.stringify({ settings: {
+                  igdb_client_id:     credInput.client_id,
+                  igdb_client_secret: credInput.client_secret,
+                  webhook_secret:     credInput.webhook_secret,
+                }}),
+              })
+                .then(r => r.json())
+                .then(() => {
+                  setCreds({ client_id: credInput.client_id, client_secret: credInput.client_secret });
+                  setCredSaved(true); setCredSaving(false);
+                })
+                .catch(() => setCredSaving(false));
+            },
+          }, credSaving ? "Saving…" : "Save Credentials"),
+          credSaved && e("span", { style: { fontSize: 12, color: "var(--green)" } },
+            e("i", { className: "fa-solid fa-check", style: { marginRight: 5 } }), " Saved"
+          )
+        )
+      ),
+
       showAddModal && e(AddGameModal, {
         creds,
         onGameAdded: () => loadGames(1),

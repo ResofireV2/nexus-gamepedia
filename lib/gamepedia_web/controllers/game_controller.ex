@@ -10,7 +10,7 @@ defmodule GamepediaWeb.GameController do
 
   def igdb_search(conn, %{"q" => q, "client_id" => cid, "client_secret" => cs}) do
     case Gamepedia.Igdb.search_games(q, cid, cs) do
-      {:ok, games} -> json(conn, %{games: games})
+      {:ok, games} -> json(conn, %{data: games})
       {:error, reason} -> conn |> put_status(:bad_gateway) |> json(%{error: reason})
     end
   end

@@ -5,29 +5,26 @@ defmodule GamepediaWeb.GenreController do
 
   # GET /api/admin/genres
   def index(conn, _params) do
-    json(conn, %{genres: Genres.list_genres()})
+    json(conn, %{data: Enum.map(Genres.list_genres(), &genre_map/1)})
   end
 
   # POST /api/admin/genres
-  # Body: {name}
   def create(conn, %{"name" => name}) do
     case Genres.create_genre(name) do
       {:ok, genre} ->
-        conn |> put_status(:created) |> json(%{genre: genre_map(genre)})
-
+        conn |> put_status(:created) |> json(%{data: genre_map(genre)})
       {:error, changeset} ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: format_errors(changeset)})
     end
   end
 
-  def create(conn, _), do:
-    conn |> put_status(:bad_request) |> json(%{error: "Required: name"})
+  def create(conn, _),
+    do: conn |> put_status(:bad_request) |> json(%{error: "Required: name"})
 
   # PATCH /api/admin/genres/:id
-  # Body: {name}
   def update(conn, %{"id" => id, "name" => name}) do
     case Genres.update_genre(String.to_integer(id), name) do
-      {:ok, genre}         -> json(conn, %{genre: genre_map(genre)})
+      {:ok, genre}         -> json(conn, %{data: genre_map(genre)})
       {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "Genre not found"})
       {:error, changeset}  -> conn |> put_status(:unprocessable_entity) |> json(%{error: format_errors(changeset)})
     end
@@ -41,7 +38,7 @@ defmodule GamepediaWeb.GenreController do
     end
   end
 
-  defp genre_map(g), do: %{id: g.id, name: g.name, slug: g.slug, igdb_id: g.igdb_id}
+  defp genre_map(g), do: %{id: g.id, name: g.name, slug: g.slug}
 
   defp format_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
