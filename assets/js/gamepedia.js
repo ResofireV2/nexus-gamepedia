@@ -1405,7 +1405,7 @@
               ev.preventDefault();
               if (window._nexusNavigate)
                 window._nexusNavigate("ext-route",
-                  { _match: NE.matchRoute(\`/gamepedia/games/\${game.slug}\`) });
+                  { _match: NE.matchRoute(`/gamepedia/games/${game.slug}`) });
             } },
               game.cover_image_url
                 ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-gl-card-cover" })
