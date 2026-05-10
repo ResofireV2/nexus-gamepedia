@@ -1267,18 +1267,26 @@
           e("p", { className: "gp-detail-summary" }, game.summary)
         ),
 
-        // Trailer
+        // Trailer — uses Nexus's built-in lite YouTube embed (.yt-lite)
         game.trailer_youtube_id && e("div", { style: { marginBottom: 24 } },
           e("div", { className: "gp-detail-section-label" }, "Trailer"),
-          e("div", { className: "gp-detail-trailer" },
-            e("iframe", {
-              src:             `https://www.youtube.com/embed/${game.trailer_youtube_id}`,
-              title:           `${game.name} trailer`,
-              frameBorder:     "0",
-              allow:           "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
-              allowFullScreen: true,
-              style:           { width: "100%", height: "100%", border: "none", borderRadius: 10 },
-            })
+          e("div", {
+            className:    "yt-lite",
+            "data-id":    game.trailer_youtube_id,
+          },
+            e("img", {
+              className: "yt-thumb",
+              src:       `https://i.ytimg.com/vi/${game.trailer_youtube_id}/maxresdefault.jpg`,
+              alt:       `${game.name} trailer`,
+              loading:   "lazy",
+              onError:   ev => { ev.target.src = `https://i.ytimg.com/vi/${game.trailer_youtube_id}/hqdefault.jpg`; },
+            }),
+            e("div", { className: "yt-play" },
+              e("svg", { height: "48", viewBox: "0 0 68 48", width: "68", xmlns: "http://www.w3.org/2000/svg" },
+                e("path", { d: "M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z", fill: "#f00" }),
+                e("path", { d: "M45 24 27 14v20", fill: "#fff" })
+              )
+            )
           )
         ),
 
@@ -1590,7 +1598,6 @@
 .gp-detail-single{padding:20px 20px 0;}
 .gp-detail-section-label{font-size:10px;font-weight:500;color:var(--t4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
 .gp-detail-summary{font-size:13px;color:var(--t3);line-height:1.75;}
-.gp-detail-trailer{width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;border:0.5px solid var(--b1);}
 .gp-detail-threads{display:flex;flex-direction:column;gap:5px;}
 .gp-detail-thread-row{background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:background .12s;}
 .gp-detail-thread-row:hover{background:var(--s3);}
