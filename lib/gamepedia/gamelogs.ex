@@ -154,7 +154,14 @@ defmodule Gamepedia.Gamelogs do
 
     added_this_month =
       Enum.count(all, fn g ->
-        g.inserted_at && DateTime.compare(g.inserted_at, month_ago) == :gt
+        case g.inserted_at do
+          nil -> false
+          %NaiveDateTime{} = ndt ->
+            dt = DateTime.from_naive!(ndt, "Etc/UTC")
+            DateTime.compare(dt, month_ago) == :gt
+          %DateTime{} = dt ->
+            DateTime.compare(dt, month_ago) == :gt
+        end
       end)
 
     playing   = Enum.find(all, & &1.is_playing)
