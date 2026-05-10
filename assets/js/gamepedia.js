@@ -51,30 +51,20 @@
     };
   })();
 
-  // Patch _nexusNavigate to re-attach the component function to _match
-  // before Nexus renders ExtensionRoutePage. Without this, after pushState
-  // strips the component, the page shows an infinite loading spinner.
-  // We intercept navigate calls for ext-route and inject the live component.
+  // Patch NE.matchRoute to always return the live component from registered routes.
+  // This ensures ExtensionRoutePage always gets the component even when pushState
+  // has stripped it from the history state (which happens on mobile and hard refresh).
   (function() {
-    const pollInterval = setInterval(() => {
-      if (!window._nexusNavigate) return;
-      clearInterval(pollInterval);
-      const orig = window._nexusNavigate;
-      window._nexusNavigate = function(page, props) {
-        if (page === "ext-route" && props?._match && !props._match.component) {
-          const pattern = props._match.pattern;
-          if (pattern) {
-            // Reconstruct full URL from pattern + params, then re-match to get component
-            const url = NE.routeUrl(pattern, props);
-            const live = NE.matchRoute(url);
-            if (live?.component) {
-              props = { ...props, _match: live };
-            }
-          }
-        }
-        return orig(page, props);
-      };
-    }, 50);
+    const origMatch = NE.matchRoute.bind(NE);
+    NE.matchRoute = function(pathname) {
+      const result = origMatch(pathname);
+      if (result && !result.component) {
+        // Re-find the component from the live route registry
+        const live = NE._routes.find(r => r.regex.test(pathname));
+        if (live?.component) result.component = live.component;
+      }
+      return result;
+    };
   })();
 
   const { useState, useEffect, useRef, useReducer } = React;
