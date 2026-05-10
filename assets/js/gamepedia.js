@@ -143,7 +143,7 @@
           img.alt = game.name;
           row.appendChild(img);
         } else {
-          row.appendChild(mk("div", { className: "gp-result-nocover" }, "\uD83C\uDFAE"));
+          const nc1 = mk("div", { className: "gp-result-nocover" }); nc1.innerHTML = '<i class="fa-solid fa-gamepad"></i>'; row.appendChild(nc1);
         }
         const info = mk("div", { className: "gp-result-info" },
           mk("div", { className: "gp-result-name" }, game.name)
@@ -665,9 +665,15 @@
             className: "gp-admin-tab" + (tab === t ? " active" : ""),
             onClick:   () => { setTab(t); if (t === "stats" && !stats) loadStats(); },
           },
-            t === "games"       ? "\uD83C\uDFAE Games"       :
-            t === "genres"      ? "\uD83C\uDFF7 Genres"      :
-            t === "stats"       ? "\uD83D\uDCCA Stats"       : "\uD83D\uDD11 Credentials"
+            e("span", { style: { display: "flex", alignItems: "center", gap: 6 } },
+              e("i", { className:
+                t === "games"       ? "fa-solid fa-gamepad" :
+                t === "genres"      ? "fa-solid fa-tags" :
+                t === "stats"       ? "fa-solid fa-chart-bar" : "fa-solid fa-key",
+                style: { fontSize: 12 }
+              }),
+              t === "games" ? "Games" : t === "genres" ? "Genres" : t === "stats" ? "Stats" : "Credentials"
+            )
           )
         )
       ),
@@ -990,7 +996,7 @@
             e("div", { key: game.igdb_id, className: "gp-import-row" },
               game.cover_image_url
                 ? e("img", { className: "gp-import-cover", src: game.cover_image_url, alt: game.name })
-                : e("div", { className: "gp-import-nocover" }, "\uD83C\uDFAE"),
+                : e("div", { className: "gp-import-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
               e("div", { className: "gp-import-info" },
                 e("strong", null, game.name),
                 game.release_year && e("span", { className: "gp-import-year" }, ` (${game.release_year})`),
