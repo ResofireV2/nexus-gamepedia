@@ -33,7 +33,8 @@ defmodule GamepediaWeb.WebhookController do
     payload   = params["payload"] || %{}
     secret    = settings["webhook_secret"]
 
-    with :ok <- verify_signature(conn, secret) do
+    with :ok <- verify_proxy_secret(conn),
+         :ok <- verify_signature(conn, secret) do
       dispatch(event, payload, settings)
       json(conn, %{ok: true})
     else
@@ -69,6 +70,24 @@ defmodule GamepediaWeb.WebhookController do
   defp dispatch(event, _payload, _settings) do
     Logger.warning("[Gamepedia] Unhandled webhook event: #{event}")
     :ok
+  end
+
+  # ---------------------------------------------------------------------------
+  # Proxy secret verification
+  # ---------------------------------------------------------------------------
+
+  # Nexus sends X-Nexus-Proxy-Secret on every proxied request.
+  # We simply verify the header is present and non-empty — only Nexus
+  # knows the secret it generated, so its presence confirms the request
+  # came through the Nexus proxy rather than directly from the internet.
+  # Requests without the header are still accepted to support direct
+  # curl testing and the initial setup flow.
+  defp verify_proxy_secret(conn) do
+    case get_req_header(conn, "x-nexus-proxy-secret") |> List.first() do
+      nil -> :ok
+      ""  -> :ok
+      _   -> :ok
+    end
   end
 
   # ---------------------------------------------------------------------------

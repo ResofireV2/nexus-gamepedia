@@ -1,13 +1,3 @@
-# Gamepedia path proxy — append this block to the existing Nexus Caddyfile,
-# INSIDE the billyrayfoss.com { } block, before the closing brace.
-#
-# It forwards all /gamepedia/* requests to the Gamepedia service on port 4001
-# and strips the /gamepedia prefix so the service sees clean paths.
-
-@gamepedia {
-    path /gamepedia/*
-}
-handle @gamepedia {
-    uri strip_prefix /gamepedia
-    reverse_proxy localhost:4001
-}
+# Gamepedia Caddyfile — for reference only.
+# The active Caddy config lives at /etc/caddy/Caddyfile on the server.
+# See README.md for the block to paste into the Nexus Caddyfile.

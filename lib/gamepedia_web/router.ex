@@ -8,34 +8,38 @@ defmodule GamepediaWeb.Router do
   scope "/", GamepediaWeb do
     pipe_through :api
 
-    # Stage 3 — Nexus webhook receiver
+    # Nexus webhook receiver
     post "/webhook", WebhookController, :handle
+
+    # Digest email sections
+    post "/digest/new_games",    DigestController, :new_games
+    post "/digest/top_gamelogs", DigestController, :top_gamelogs
   end
 
   scope "/api", GamepediaWeb do
     pipe_through :api
 
-    # Health check
+    # Health
     get "/health", HealthController, :index
 
-    # Stage 1 — IGDB search
+    # Public — IGDB search (used by admin Add Game modal)
     get "/games/search", GameController, :igdb_search
 
-    # Stage 2 — Game library (public)
-    get  "/games",       GameController, :index
-    get  "/games/:slug", GameController, :show
+    # Public — game library
+    get "/games",       GameController, :index
+    get "/games/:slug", GameController, :show
 
-    # Stage 4 — Post game linking
+    # Public — post game links
     post "/posts/:post_id/games", PostGameController, :create
     get  "/posts/:post_id/games", PostGameController, :index
 
-    # Stage 5 — Gamelog
-    post   "/gamelog",                    GamelogController, :add
-    delete "/gamelog/:game_id",           GamelogController, :remove
-    post   "/gamelog/:game_id/playing",   GamelogController, :toggle_playing
-    get    "/gamelog/:username",          GamelogController, :index
+    # Public — gamelog
+    post   "/gamelog",                  GamelogController, :add
+    delete "/gamelog/:game_id",         GamelogController, :remove
+    post   "/gamelog/:game_id/playing", GamelogController, :toggle_playing
+    get    "/gamelog/:username",        GamelogController, :index
 
-    # Admin game management
+    # Admin — game management
     get    "/admin/games",             AdminGameController, :index
     post   "/admin/games/import",      AdminGameController, :import
     post   "/admin/games/:id/refresh", AdminGameController, :refresh
@@ -43,7 +47,7 @@ defmodule GamepediaWeb.Router do
     delete "/admin/games/:id",         AdminGameController, :delete
     get    "/admin/stats",             AdminGameController, :stats
 
-    # Stage 2 — Genre management
+    # Admin — genre management
     get    "/admin/genres",     GenreController, :index
     post   "/admin/genres",     GenreController, :create
     patch  "/admin/genres/:id", GenreController, :update
