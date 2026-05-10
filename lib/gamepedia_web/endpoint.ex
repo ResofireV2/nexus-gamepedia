@@ -11,10 +11,12 @@ defmodule GamepediaWeb.Endpoint do
     gzip: true,
     headers: %{"access-control-allow-origin" => "*"}
 
-  # Serve locally stored game screenshots from the bind-mounted directory.
+  # Serve locally stored game screenshots. The directory is bind-mounted at
+  # runtime so we resolve the path at runtime via the application env rather
+  # than compile_env, which would bake in a path that doesn't exist at build time.
   plug Plug.Static,
     at: "/screenshots",
-    from: Application.compile_env(:gamepedia, :screenshots_dir, "/app/screenshots"),
+    from: {GamepediaWeb.Endpoint, :screenshots_dir},
     gzip: false
 
   # Must come before Plug.Parsers so the raw body is still available for
@@ -30,4 +32,9 @@ defmodule GamepediaWeb.Endpoint do
   plug Plug.Head
 
   plug GamepediaWeb.Router
+
+  @doc false
+  def screenshots_dir do
+    Application.get_env(:gamepedia, :screenshots_dir, "/app/screenshots")
+  end
 end

@@ -19,5 +19,9 @@ if config_env() == :prod do
     http: [ip: {0, 0, 0, 0}, port: port],
     secret_key_base: secret_key_base,
     server: true
-end
 
+  # Screenshots are stored in a bind-mounted directory that survives rebuilds.
+  # Defaults to /app/screenshots but can be overridden via SCREENSHOTS_DIR env var.
+  config :gamepedia, :screenshots_dir,
+    System.get_env("SCREENSHOTS_DIR", "/app/screenshots")
+end
