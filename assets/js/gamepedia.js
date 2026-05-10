@@ -512,6 +512,9 @@
 
     // Credentials — from Nexus extension settings via API
     const [creds,        setCreds]       = useState({ client_id: "", client_secret: "" });
+    const [credInput,    setCredInput]   = useState({ client_id: "", client_secret: "", webhook_secret: "" });
+    const [credSaving,   setCredSaving]  = useState(false);
+    const [credSaved,    setCredSaved]   = useState(false);
 
     useEffect(() => {
       // Load saved IGDB credentials from extension settings
@@ -519,10 +522,13 @@
         .then(r => r.json())
         .then(d => {
           const s = d.extension?.settings || {};
-          setCreds({
-            client_id:     s.igdb_client_id     || "",
-            client_secret: s.igdb_client_secret || "",
-          });
+          const loaded = {
+            client_id:      s.igdb_client_id     || "",
+            client_secret:  s.igdb_client_secret || "",
+            webhook_secret: s.webhook_secret      || "",
+          };
+          setCreds({ client_id: loaded.client_id, client_secret: loaded.client_secret });
+          setCredInput(loaded);
         })
         .catch(() => {});
       loadGames(1);
@@ -1024,6 +1030,115 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Game Browse Page — /gamepedia/browse
+  // ---------------------------------------------------------------------------
+
+  function GameBrowsePage({ navigate, currentUser }) {
+    const [games,       setGames]       = useState([]);
+    const [loading,     setLoading]     = useState(true);
+    const [total,       setTotal]       = useState(0);
+    const [page,        setPage]        = useState(1);
+    const [hasMore,     setHasMore]     = useState(false);
+    const [search,      setSearch]      = useState("");
+    const [searchInput, setSearchInput] = useState("");
+    const [genres,      setGenres]      = useState([]);
+    const [genre,       setGenre]       = useState("");
+    const [sort,        setSort]        = useState("newest");
+    const searchTimer = useRef(null);
+
+    function load(p, s, g, q, append) {
+      setLoading(true);
+      if (!append) setGames([]);
+      const params = new URLSearchParams({ page: p, sort: s });
+      if (g) params.set("genre", g);
+      if (q) params.set("search", q);
+      apiFetch(`/games?${params}`)
+        .then(r => {
+          setGames(prev => append ? [...prev, ...(r.data || [])] : (r.data || []));
+          setTotal(r.meta?.total || 0);
+          setHasMore(r.meta?.has_more || false);
+          if (r.filters?.genres) setGenres(r.filters.genres);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    }
+
+    useEffect(() => { load(1, sort, genre, search); }, []);
+
+    return e("div", { className: "gp-gamelog-page" },
+      e("div", { className: "gp-gl-filters" },
+        e("input", {
+          className:   "gp-input",
+          type:        "text",
+          placeholder: "Search games\u2026",
+          value:       searchInput,
+          style:       { flex: 1 },
+          onChange:    ev => {
+            setSearchInput(ev.target.value);
+            clearTimeout(searchTimer.current);
+            searchTimer.current = setTimeout(() => {
+              setSearch(ev.target.value); setPage(1);
+              load(1, sort, genre, ev.target.value);
+            }, 400);
+          },
+        }),
+        genres.length > 0 && e("select", {
+          className: "gp-select",
+          value:     genre,
+          onChange:  ev => { setGenre(ev.target.value); setPage(1); load(1, sort, ev.target.value, search); },
+        },
+          e("option", { value: "" }, "All Genres"),
+          genres.map(g => e("option", { key: g.id, value: g.slug }, g.name))
+        ),
+        e("select", {
+          className: "gp-select",
+          value:     sort,
+          onChange:  ev => { setSort(ev.target.value); setPage(1); load(1, ev.target.value, genre, search); },
+        },
+          e("option", { value: "newest" }, "Newest"),
+          e("option", { value: "az"     }, "A \u2192 Z"),
+          e("option", { value: "year"   }, "Release Year")
+        )
+      ),
+
+      !loading && e("p", { className: "gp-admin-count" }, `${total} game${total !== 1 ? "s" : ""}`),
+
+      loading && games.length === 0 && e("div", { className: "gp-loading" },
+        e("i", { className: "fa-solid fa-spinner fa-spin" }), " Loading\u2026"
+      ),
+
+      !loading && games.length === 0 && e("div", { className: "gp-empty" },
+        "No games found."
+      ),
+
+      games.length > 0 && e("div", { className: "gp-grid" },
+        games.map(game =>
+          e("div", { key: game.id, className: "gp-gl-card" },
+            e("a", { href: "#", className: "gp-gl-card-link", onClick: ev => ev.preventDefault() },
+              game.cover_image_url
+                ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-gl-card-cover" })
+                : e("div", { className: "gp-gl-card-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
+              e("div", { className: "gp-gl-card-info" },
+                e("div", { className: "gp-gl-card-name" }, game.name),
+                game.release_year && e("div", { className: "gp-gl-card-year" }, String(game.release_year)),
+                game.developer    && e("div", { className: "gp-gl-card-year" }, game.developer)
+              )
+            )
+          )
+        )
+      ),
+
+      hasMore && e("div", { style: { textAlign: "center", padding: "16px 0" } },
+        e("button", {
+          className: "gp-btn",
+          disabled:  loading,
+          onClick:   () => { const p = page + 1; setPage(p); load(p, sort, genre, search, true); },
+        }, loading ? "Loading\u2026" : "Load more")
+      )
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // CSS
   // ---------------------------------------------------------------------------
 
@@ -1213,14 +1328,15 @@
 
   // SPA route — gamelog page
   NE.registerRoute("/gamepedia/gamelog/:user_id", GamelogPage, { title: "Gamelog" });
+  NE.registerRoute("/gamepedia/browse", GameBrowsePage, { title: "Gamepedia" });
 
-  // Explore sidebar item — Browse Games
+  // Explore sidebar item — Gamepedia
   NE.registerExploreItem({
     id:       "gamepedia-browse",
-    label:    "Browse Games",
+    label:    "Gamepedia",
     icon:     "fa-gamepad",
     page:     "ext-route",
-    props:    NE.matchRoute("/gamepedia/admin") || {},
+    props:    NE.matchRoute("/gamepedia/browse") || {},
     authOnly: false,
     priority: 60,
   });
