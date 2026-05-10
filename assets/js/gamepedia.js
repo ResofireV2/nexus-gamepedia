@@ -210,15 +210,18 @@
   // Receives: { username, currentUser, navigate }
   // ---------------------------------------------------------------------------
 
-  function GamepediaGamelogLink({ username, navigate }) {
+  function GamepediaGamelogLink({ username, currentUser, navigate }) {
+    // Navigate to the profile owner's gamelog using their user context
+    // The profile slot passes username; we navigate to gamelog by user_id
+    // which is resolved via the currentUser if viewing own profile
     function go(ev) {
       ev.preventDefault();
       if (window._nexusNavigate)
         window._nexusNavigate("ext-route",
-          NE.matchRoute(`/gamepedia/users/${username}`) || {});
+          NE.matchRoute(`/gamepedia/gamelog`) || {});
     }
     return e("a", {
-      href:      `/gamepedia/users/${username}`,
+      href:      "#",
       onClick:   go,
       className: "gp-profile-link",
     },
@@ -232,8 +235,10 @@
   // Receives: { username, currentUser, navigate }
   // ---------------------------------------------------------------------------
 
-  function GamelogPage({ username, currentUser, navigate }) {
+  function GamelogPage({ user_id, currentUser, navigate }) {
     const currentUserId = currentUser?.id || null;
+    // Support both user_id param (from route) and currentUser fallback
+    const targetUserId = user_id || currentUserId;
 
     const [data,        setData]        = useState(null);
     const [loading,     setLoading]     = useState(true);
@@ -246,30 +251,31 @@
     const [playingBusy, setPlayingBusy] = useState(false);
     const searchTimer = useRef(null);
 
-    const isOwner = !!(currentUserId && data && currentUserId === data.user?.id);
+    const isOwner = !!(currentUserId && data && data.is_owner);
 
     function load(p, s, g, q) {
+      if (!targetUserId) { setError("No user specified."); setLoading(false); return; }
       setLoading(true);
       const params = new URLSearchParams({ page: p, sort: s });
       if (g) params.set("genre", g);
       if (q) params.set("search", q);
-      apiFetch(`/gamelog/${encodeURIComponent(username)}?${params}`)
+      apiFetch(`/gamelog/${targetUserId}?${params}`)
         .then(r => { setData(r); setLoading(false); })
         .catch(() => { setError("Failed to load gamelog."); setLoading(false); });
     }
 
-    useEffect(() => { load(1, sort, genre, search); }, [username]);
+    useEffect(() => { load(1, sort, genre, search); }, [targetUserId]);
 
     function removeGame(game) {
       if (!currentUserId) return;
-      apiFetch(`/gamelog/${game.id}`, { method: "DELETE", body: { user_id: currentUserId } })
+      apiFetch(`/gamelog/${game.id}`, { method: "DELETE" })
         .then(() => load(page, sort, genre, search));
     }
 
     function markPlaying(game) {
       if (!currentUserId || playingBusy) return;
       setPlayingBusy(true);
-      apiFetch(`/gamelog/${game.id}/playing`, { method: "POST", body: { user_id: currentUserId } })
+      apiFetch(`/gamelog/${game.id}/playing`, { method: "POST", body: {} })
         .then(() => { setPlayingBusy(false); load(page, sort, genre, search); })
         .catch(() => setPlayingBusy(false));
     }
@@ -417,8 +423,8 @@
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-      if (!currentUser?.username) { setLoading(false); return; }
-      apiFetch(`/gamelog/${encodeURIComponent(currentUser.username)}?sort=newest&page=1`)
+      if (!currentUser?.id) { setLoading(false); return; }
+      apiFetch(`/gamelog/${currentUser.id}?sort=newest&page=1`)
         .then(r => {
           const playing = (r.data || []).find(g => g.is_playing) || null;
           setGame(playing);
@@ -1206,7 +1212,7 @@
   NE.registerSlot("profile_sidebar", GamepediaGamelogLink, 50);
 
   // SPA route — gamelog page
-  NE.registerRoute("/gamepedia/users/:username", GamelogPage, { title: "Gamelog" });
+  NE.registerRoute("/gamepedia/gamelog/:user_id", GamelogPage, { title: "Gamelog" });
 
   // Explore sidebar item — Browse Games
   NE.registerExploreItem({
@@ -1214,7 +1220,7 @@
     label:    "Browse Games",
     icon:     "fa-gamepad",
     page:     "ext-route",
-    props:    NE.matchRoute("/gamepedia/users/") || {},
+    props:    NE.matchRoute("/gamepedia/admin") || {},
     authOnly: false,
     priority: 60,
   });
@@ -1238,7 +1244,7 @@
       closeCard();
       if (window._nexusNavigate)
         window._nexusNavigate("ext-route",
-          NE.matchRoute(`/gamepedia/users/${user.username}`) || {});
+          NE.matchRoute(`/gamepedia/gamelog/${user.id}`) || {});
     },
   });
 

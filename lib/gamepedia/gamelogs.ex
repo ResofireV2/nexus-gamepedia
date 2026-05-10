@@ -1,6 +1,11 @@
 defmodule Gamepedia.Gamelogs do
   @moduledoc """
   Context for gamelog operations — add, remove, toggle playing, list.
+
+  NOTE: Gamepedia runs in its own database. It has no access to the Nexus
+  users table. All user identity comes from the X-Nexus-User-Id header
+  that the Nexus proxy injects on every authenticated request.
+  Usernames are stored denormalized in the gamelog for display purposes.
   """
 
   import Ecto.Query
@@ -86,10 +91,11 @@ defmodule Gamepedia.Gamelogs do
   end
 
   # ---------------------------------------------------------------------------
-  # List a user's gamelog (paginated, filterable, sortable)
+  # List a user's gamelog by user_id (paginated, filterable, sortable)
+  # No join against Nexus users table — user_id comes from the proxy header.
   # ---------------------------------------------------------------------------
 
-  def list(username, params \\ %{}) do
+  def list(user_id, params \\ %{}) do
     page   = max(1, parse_int(params["page"] || 1))
     sort   = params["sort"] || "newest"
     genre  = params["genre"] || ""
@@ -99,8 +105,7 @@ defmodule Gamepedia.Gamelogs do
     base =
       from(g in Game,
         join: gl in @table, on: gl.game_id == g.id,
-        join: u in "users",  on: u.id == gl.user_id,
-        where: u.username == ^username,
+        where: gl.user_id == ^user_id,
         select: %{
           id:                 g.id,
           name:               g.name,
@@ -117,19 +122,11 @@ defmodule Gamepedia.Gamelogs do
     base = apply_genre_filter(base, genre)
     base = apply_sort(base, sort)
 
-    total = Repo.aggregate(base, :count)
-    games = base |> offset((^page - 1) * ^limit) |> limit(^limit) |> Repo.all()
+    total  = Repo.aggregate(base, :count)
+    games  = base |> offset((^page - 1) * ^limit) |> limit(^limit) |> Repo.all()
+    genres = list_user_genres(user_id)
 
-    user =
-      Repo.one(
-        from u in "users",
-          where: u.username == ^username,
-          select: %{id: u.id, username: u.username}
-      )
-
-    genres = list_user_genres(user && user.id)
-
-    {games, total, user, genres, page, limit}
+    {games, total, genres, page, limit}
   end
 
   # ---------------------------------------------------------------------------
@@ -160,10 +157,9 @@ defmodule Gamepedia.Gamelogs do
         g.inserted_at && DateTime.compare(g.inserted_at, month_ago) == :gt
       end)
 
-    playing  = Enum.find(all, & &1.is_playing)
+    playing   = Enum.find(all, & &1.is_playing)
     with_date = Enum.filter(all, & &1.first_release_date)
-    oldest   = Enum.min_by(with_date, & &1.first_release_date, fn -> nil end)
-    newest   = Enum.max_by(with_date, & &1.first_release_date, fn -> nil end)
+    oldest    = Enum.min_by(with_date, & &1.first_release_date, fn -> nil end)
 
     top_genre =
       from(g in "gamepedia_genres",
@@ -186,8 +182,7 @@ defmodule Gamepedia.Gamelogs do
         release_year: release_year(playing.first_release_date)
       },
       top_genre: top_genre,
-      oldest:    oldest && %{name: oldest.name, year: release_year(oldest.first_release_date)},
-      newest:    newest && %{name: newest.name, year: release_year(newest.first_release_date)}
+      oldest:    oldest && %{name: oldest.name, year: release_year(oldest.first_release_date)}
     }
   end
 
@@ -211,7 +206,6 @@ defmodule Gamepedia.Gamelogs do
   defp apply_sort(q, "year"), do: order_by(q, [g], desc: g.first_release_date)
   defp apply_sort(q, _),      do: order_by(q, [g, gl], desc: gl.inserted_at)
 
-  defp list_user_genres(nil), do: []
   defp list_user_genres(user_id) do
     from(g in "gamepedia_genres",
       join: gg in "gamepedia_game_genre", on: gg.genre_id == g.id,

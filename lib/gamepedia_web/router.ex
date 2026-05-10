@@ -37,7 +37,7 @@ defmodule GamepediaWeb.Router do
     post   "/gamelog",                  GamelogController, :add
     delete "/gamelog/:game_id",         GamelogController, :remove
     post   "/gamelog/:game_id/playing", GamelogController, :toggle_playing
-    get    "/gamelog/:username",        GamelogController, :index
+    get    "/gamelog/:user_id",          GamelogController, :index
 
     # Admin — game management
     get    "/admin/games",             AdminGameController, :index
