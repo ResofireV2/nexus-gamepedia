@@ -11,10 +11,12 @@ defmodule GamepediaWeb.Endpoint do
     gzip: true,
     headers: %{"access-control-allow-origin" => "*"}
 
-  # Serve locally stored game screenshots from the bind-mounted directory.
-  # Hardcoded to /app/screenshots — same pattern Nexus uses for /app/uploads.
+  # Serve locally stored game screenshots via /assets/screenshots/*.
+  # The Nexus extension proxy forwards /api/v1/extensions/gamepedia/assets/*
+  # to this service at /assets/*, so screenshots are reached at:
+  # /api/v1/extensions/gamepedia/assets/screenshots/{filename}
   plug Plug.Static,
-    at: "/screenshots",
+    at: "/assets/screenshots",
     from: "/app/screenshots",
     gzip: false
 

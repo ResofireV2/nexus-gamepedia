@@ -187,8 +187,8 @@ defmodule Gamepedia.Games do
 
   defp screenshots_dir, do: Application.get_env(:gamepedia, :screenshots_dir, "/app/screenshots")
 
-  # Served at /screenshots/* via Plug.Static in the endpoint
-  @screenshots_url_prefix "/screenshots"
+  # Served via the Nexus extension proxy at /api/v1/extensions/gamepedia/assets/screenshots/*
+  @screenshots_url_prefix "/api/v1/extensions/gamepedia/assets/screenshots"
 
   @doc """
   Public URL for serving a screenshot file relative path.
