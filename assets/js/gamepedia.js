@@ -38,13 +38,15 @@
       } catch(e) {
         // Strip functions recursively
         function sanitize(obj) {
-          if (obj === null || typeof obj !== "object") return obj;
-          if (Array.isArray(obj)) return obj.map(sanitize);
+          if (obj === null) return obj;
+          if (typeof obj === "function") return undefined;
+          if (obj instanceof RegExp) return undefined;
+          if (typeof obj !== "object") return obj;
+          if (Array.isArray(obj)) return obj.map(sanitize).filter(v => v !== undefined);
           const out = {};
           for (const k of Object.keys(obj)) {
-            if (typeof obj[k] !== "function") {
-              out[k] = sanitize(obj[k]);
-            }
+            const v = sanitize(obj[k]);
+            if (v !== undefined) out[k] = v;
           }
           return out;
         }
@@ -1367,7 +1369,7 @@
     label:    "Gamepedia",
     icon:     "fa-gamepad",
     page:     "ext-route",
-    props:    NE.matchRoute("/gamepedia/browse") || {},
+    props:    { _match: NE.matchRoute("/gamepedia/browse") },
     authOnly: false,
     priority: 60,
   });
