@@ -185,7 +185,7 @@ defmodule Gamepedia.Games do
   # Screenshot storage
   # ---------------------------------------------------------------------------
 
-  @screenshots_dir Application.compile_env(:gamepedia, :screenshots_dir, "/app/screenshots")
+  defp screenshots_dir, do: Application.get_env(:gamepedia, :screenshots_dir, "/app/screenshots")
 
   # Served at /screenshots/* via Plug.Static in the endpoint
   @screenshots_url_prefix "/screenshots"
@@ -227,7 +227,7 @@ defmodule Gamepedia.Games do
     filename = "#{image_id}.jpg"
     webp_name = "#{image_id}.webp"
 
-    abs_dir = @screenshots_dir
+    abs_dir = screenshots_dir()
     abs_jpg = Path.join(abs_dir, filename)
     abs_webp = Path.join(abs_dir, webp_name)
 
@@ -248,8 +248,8 @@ defmodule Gamepedia.Games do
 
   defp delete_screenshot_files(%Screenshot{local_path: nil, webp_path: nil}), do: :ok
   defp delete_screenshot_files(%Screenshot{local_path: local, webp_path: webp}) do
-    if local, do: File.rm(Path.join(@screenshots_dir, local))
-    if webp,  do: File.rm(Path.join(@screenshots_dir, webp))
+    if local, do: File.rm(Path.join(screenshots_dir(), local))
+    if webp,  do: File.rm(Path.join(screenshots_dir(), webp))
     :ok
   end
 
