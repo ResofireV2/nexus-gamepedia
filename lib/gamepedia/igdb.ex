@@ -84,6 +84,9 @@ defmodule Gamepedia.Igdb do
   end
 
   defp get_token(client_id, client_secret) do
+    # Ensure the cache table exists — creates it if not, no-ops if it does.
+    init_cache()
+
     cache_key = "#{@token_cache_key}:#{client_id}"
 
     case :ets.lookup(@token_table, cache_key) do
