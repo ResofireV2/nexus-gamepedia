@@ -1,4 +1,4 @@
-defmodule Gamepedia.Migrations.V003CreateScreenshots do
+defmodule Gamepedia.Migrations.V20260501000003CreateScreenshots do
   use Ecto.Migration
 
   def change do

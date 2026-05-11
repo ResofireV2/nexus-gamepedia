@@ -33,15 +33,15 @@ defmodule Gamepedia do
   @impl true
   def migrations do
     [
-      Gamepedia.Migrations.V001CreateGenres,
-      Gamepedia.Migrations.V002CreateGames,
-      Gamepedia.Migrations.V003CreateScreenshots,
-      Gamepedia.Migrations.V004CreateGameGenre,
-      Gamepedia.Migrations.V005CreatePostGame,
-      Gamepedia.Migrations.V006CreateAwards,
-      Gamepedia.Migrations.V007CreateGamelogs,
-      Gamepedia.Migrations.V008CreateRatings,
-      Gamepedia.Migrations.V009AddLocalPathsToScreenshots,
+      Gamepedia.Migrations.V20260501000001CreateGenres,
+      Gamepedia.Migrations.V20260501000002CreateGames,
+      Gamepedia.Migrations.V20260501000003CreateScreenshots,
+      Gamepedia.Migrations.V20260501000004CreateGameGenre,
+      Gamepedia.Migrations.V20260501000005CreatePostGame,
+      Gamepedia.Migrations.V20260501000006CreateAwards,
+      Gamepedia.Migrations.V20260501000007CreateGamelogs,
+      Gamepedia.Migrations.V20260501000008CreateRatings,
+      Gamepedia.Migrations.V20260510000001AddLocalPathsToScreenshots,
     ]
   end
 

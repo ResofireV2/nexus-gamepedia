@@ -1,4 +1,4 @@
-defmodule Gamepedia.Migrations.V009AddLocalPathsToScreenshots do
+defmodule Gamepedia.Migrations.V20260510000001AddLocalPathsToScreenshots do
   use Ecto.Migration
 
   def change do

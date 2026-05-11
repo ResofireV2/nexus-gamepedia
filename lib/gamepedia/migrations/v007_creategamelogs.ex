@@ -1,4 +1,4 @@
-defmodule Gamepedia.Migrations.V007CreateGamelogs do
+defmodule Gamepedia.Migrations.V20260501000007CreateGamelogs do
   use Ecto.Migration
 
   def change do

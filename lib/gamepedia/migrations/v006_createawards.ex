@@ -1,4 +1,4 @@
-defmodule Gamepedia.Migrations.V006CreateAwards do
+defmodule Gamepedia.Migrations.V20260501000006CreateAwards do
   use Ecto.Migration
 
   def change do
