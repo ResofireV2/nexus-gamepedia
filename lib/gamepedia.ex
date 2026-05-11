@@ -17,7 +17,6 @@ defmodule Gamepedia do
     %{
       slug:        "gamepedia",
       name:        "Gamepedia",
-      version:     "0.1.0",
       description: "A game database powered by IGDB. Browse games, link threads to games, and track your gamelog.",
       author:      "ResofireV2",
       homepage:    "https://github.com/ResofireV2/nexus-gamepedia",
