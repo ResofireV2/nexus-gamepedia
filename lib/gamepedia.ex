@@ -124,6 +124,16 @@ defmodule Gamepedia do
         "label"   => "Most Discussed digest count",
         "default" => 6,
       },
+      "max_linked_games" => %{
+        "type"    => "integer",
+        "label"   => "Max linked games per post",
+        "default" => 3,
+      },
+      "slideshow_seconds" => %{
+        "type"    => "integer",
+        "label"   => "Slideshow timer (seconds)",
+        "default" => 5,
+      },
     }
   end
 

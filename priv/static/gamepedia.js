@@ -204,50 +204,104 @@
   // ---------------------------------------------------------------------------
 
   function PostSidebarGameCard({ postId, currentUser, navigate }) {
-    const [game,       setGame]       = useState(null);
-    const [inGamelog,  setInGamelog]  = useState(false);
-    const [logBusy,    setLogBusy]    = useState(false);
+    const [games,      setGames]      = useState([]);
+    const [gameDetails,setGameDetails]= useState({});
+    const [gamelogs,   setGamelogs]   = useState({});
+    const [logBusy,    setLogBusy]    = useState({});
+    const [activeIdx,  setActiveIdx]  = useState(0);
+    const [progress,   setProgress]   = useState(0);
+    const timerRef  = useRef(null);
+    const startRef  = useRef(null);
+    const rafRef    = useRef(null);
+
+    // Read slideshow interval from settings (stored on window by admin panel)
+    const interval  = (window._gpSlideshowSeconds || 5) * 1000;
 
     useEffect(() => {
       if (!postId) return;
-      setGame(null); setInGamelog(false);
-
-      // Fetch the first linked game for this post, then get full detail
+      setGames([]); setGameDetails({}); setGamelogs({}); setActiveIdx(0); setProgress(0);
       apiFetch(`/posts/${postId}/games`)
         .then(r => {
-          const first = (r.data || [])[0];
-          if (!first) return;
-          // Fetch full game detail for ratings, awards, gamelog count
-          apiFetch(`/games/${first.slug}`)
-            .then(gr => {
-              if (gr.data) setGame(gr.data);
-            })
-            .catch(() => setGame(first));
+          const list = r.data || [];
+          setGames(list);
+          list.forEach(g => {
+            apiFetch(`/games/${g.slug}`)
+              .then(gr => { if (gr.data) setGameDetails(p => ({ ...p, [g.id]: gr.data })); })
+              .catch(() => setGameDetails(p => ({ ...p, [g.id]: g })));
+          });
+          if (currentUser?.id && list.length > 0) {
+            apiFetch(`/gamelog/${currentUser.id}`)
+              .then(gr => {
+                const logMap = {};
+                (gr.data || []).forEach(x => { logMap[x.id] = true; });
+                setGamelogs(logMap);
+              })
+              .catch(() => {});
+          }
         })
         .catch(() => {});
     }, [postId]);
 
+    // Slideshow timer with progress bar
     useEffect(() => {
-      if (!game || !currentUser) return;
-      apiFetch(`/gamelog/${currentUser.id}`)
-        .then(gr => {
-          const entry = (gr.data || []).find(g => g.id === game.id);
-          if (entry) setInGamelog(true);
-        })
-        .catch(() => {});
-    }, [game, currentUser]);
+      if (games.length <= 1) return;
+      const tick = () => {
+        const elapsed = Date.now() - startRef.current;
+        const pct = Math.min(elapsed / interval, 1);
+        setProgress(pct);
+        if (pct < 1) {
+          rafRef.current = requestAnimationFrame(tick);
+        } else {
+          setActiveIdx(i => (i + 1) % games.length);
+          setProgress(0);
+          startRef.current = Date.now();
+          rafRef.current = requestAnimationFrame(tick);
+        }
+      };
+      startRef.current = Date.now();
+      rafRef.current = requestAnimationFrame(tick);
+      return () => { cancelAnimationFrame(rafRef.current); };
+    }, [games.length, activeIdx === 0 ? 0 : 1]);
+
+    function goTo(idx) {
+      cancelAnimationFrame(rafRef.current);
+      setActiveIdx(idx);
+      setProgress(0);
+      startRef.current = Date.now();
+      if (games.length > 1) {
+        const tick = () => {
+          const elapsed = Date.now() - startRef.current;
+          const pct = Math.min(elapsed / interval, 1);
+          setProgress(pct);
+          if (pct < 1) { rafRef.current = requestAnimationFrame(tick); }
+          else {
+            setActiveIdx(i => (i + 1) % games.length);
+            setProgress(0);
+            startRef.current = Date.now();
+            rafRef.current = requestAnimationFrame(tick);
+          }
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    }
+
+    if (games.length === 0) return null;
+    const stub = games[activeIdx] || games[0];
+    const game = gameDetails[stub.id] || stub;
+    const inGamelog = !!gamelogs[game.id];
+    const awards = game.awards || [];
 
     function toggleGamelog() {
       if (!currentUser || !game) return;
-      setLogBusy(true);
+      setLogBusy(p => ({ ...p, [game.id]: true }));
       if (inGamelog) {
         apiFetch(`/gamelog/${game.id}`, { method: "DELETE" })
-          .then(() => setInGamelog(false))
-          .finally(() => setLogBusy(false));
+          .then(() => setGamelogs(p => ({ ...p, [game.id]: false })))
+          .finally(() => setLogBusy(p => ({ ...p, [game.id]: false })));
       } else {
         apiFetch("/gamelog", { method: "POST", body: { game_id: game.id } })
-          .then(() => setInGamelog(true))
-          .finally(() => setLogBusy(false));
+          .then(() => setGamelogs(p => ({ ...p, [game.id]: true })))
+          .finally(() => setLogBusy(p => ({ ...p, [game.id]: false })));
       }
     }
 
@@ -258,32 +312,40 @@
           { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
     }
 
-    if (!game) return null;
-
-    const awards = game.awards || [];
-
     return e("div", { className: "gp-psb" },
-      e("div", { className: "gp-rw-label" }, "linked game"),
+      e("div", { className: "gp-rw-label" },
+        games.length > 1 ? `linked games (${activeIdx + 1}/${games.length})` : "linked game"
+      ),
 
-      // Cover art with genre + title overlay
+      // Cover art
       e("div", { className: "gp-psb-cover-wrap", onClick: goToGame },
         game.cover_image_url
           ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-psb-cover-img" })
-          : e("div", { className: "gp-psb-cover-empty" },
-              e("i", { className: "fa-solid fa-gamepad" })
-            ),
+          : e("div", { className: "gp-psb-cover-empty" }, e("i", { className: "fa-solid fa-gamepad" })),
         e("div", { className: "gp-psb-overlay" }),
         e("div", { className: "gp-psb-cover-bottom" },
           game.genres?.length > 0 && e("div", { className: "gp-psb-genres" },
-            game.genres.slice(0, 2).map(g =>
-              e("span", { key: g.id, className: "gp-psb-genre-pill" }, g.name)
-            )
+            game.genres.slice(0, 2).map(g => e("span", { key: g.id, className: "gp-psb-genre-pill" }, g.name))
           ),
           e("div", { className: "gp-psb-name" }, game.name),
           e("div", { className: "gp-psb-sub" },
-            [game.developer, game.publisher, game.release_year]
-              .filter(Boolean).map(String)
-              .slice(0, 2).join(" · ")
+            [game.developer, game.publisher, game.release_year].filter(Boolean).map(String).slice(0, 2).join(" · ")
+          )
+        )
+      ),
+
+      // Slideshow progress bar + dots (only when multiple games)
+      games.length > 1 && e("div", { className: "gp-psb-slideshow" },
+        e("div", { className: "gp-psb-progress-bar" },
+          e("div", { className: "gp-psb-progress-fill", style: { width: (progress * 100) + "%" } })
+        ),
+        e("div", { className: "gp-psb-dots" },
+          games.map((_, i) =>
+            e("div", {
+              key:       i,
+              className: "gp-psb-dot" + (i === activeIdx ? " active" : ""),
+              onClick:   () => goTo(i),
+            })
           )
         )
       ),
@@ -319,15 +381,14 @@
         )
       ),
 
-      // Actions
       e("div", { className: "gp-psb-btn gp-psb-btn-view", onClick: goToGame },
         "View in Gamepedia ",
         e("i", { className: "fa-solid fa-arrow-right", style: { fontSize: 10 } })
       ),
       currentUser && e("div", {
         className: "gp-psb-btn " + (inGamelog ? "gp-psb-btn-added" : "gp-psb-btn-log"),
-        onClick:   logBusy ? undefined : toggleGamelog,
-        style:     logBusy ? { opacity: .5 } : {},
+        onClick:   logBusy[game.id] ? undefined : toggleGamelog,
+        style:     logBusy[game.id] ? { opacity: .5 } : {},
       },
         inGamelog
           ? e("span", null, e("i", { className: "fa-solid fa-check", style: { marginRight: 5 } }), "In your Gamelog")
@@ -639,11 +700,13 @@
     const [stats,        setStats]       = useState(null);
     const [statsLoading, setStatsLoading]= useState(false);
 
-    // Credentials — from Nexus extension settings via API
+    // Settings — from Nexus extension settings via API
     const [creds,        setCreds]       = useState({ client_id: "", client_secret: "" });
     const [credInput,    setCredInput]   = useState({ client_id: "", client_secret: "", webhook_secret: "" });
     const [credSaving,   setCredSaving]  = useState(false);
     const [credSaved,    setCredSaved]   = useState(false);
+    const [maxLinkedGames,   setMaxLinkedGames]   = useState(3);
+    const [slideshowSeconds, setSlideshowSeconds] = useState(5);
 
     // Digest tab state — counts per section
     const [digestCfg,    setDigestCfg]   = useState({
@@ -671,6 +734,12 @@
             top_gamelogs_count:   parseInt(s.digest_top_gamelogs_count)   || 6,
             most_discussed_count: parseInt(s.digest_most_discussed_count) || 6,
           });
+          const ml = parseInt(s.max_linked_games) || 3;
+          const ss = parseInt(s.slideshow_seconds) || 5;
+          setMaxLinkedGames(ml);
+          setSlideshowSeconds(ss);
+          window._gpMaxLinkedGames = ml;
+          window._gpSlideshowSeconds = ss;
           setDigestLoaded(true);
         })
         .catch(() => {});
@@ -760,7 +829,7 @@
 
       // Tabs
       e("div", { className: "gp-admin-tabs" },
-        ["games", "genres", "stats", "digest", "credentials"].map(t =>
+        ["games", "genres", "stats", "digest", "settings"].map(t =>
           e("button", {
             key:       t,
             className: "gp-admin-tab" + (tab === t ? " active" : ""),
@@ -769,7 +838,7 @@
               if (t === "stats" && !stats) loadStats();
               // Wire the top-bar Save Changes button to save extension settings
               window._nexusAdminSaveFn = async () => {
-                if (t === "credentials") {
+                if (t === "settings") {
                   await fetch("/api/v1/admin/extensions/gamepedia/settings", {
                     method: "PATCH", headers: authHeaders(),
                     body: JSON.stringify({ settings: {
@@ -788,6 +857,18 @@
                       digest_most_discussed_count: digestCfg.most_discussed_count,
                     }}),
                   });
+                } else if (t === "settings") {
+                  await fetch("/api/v1/admin/extensions/gamepedia/settings", {
+                    method: "PATCH", headers: authHeaders(),
+                    body: JSON.stringify({ settings: {
+                      igdb_client_id:     credInput.client_id,
+                      igdb_client_secret: credInput.client_secret,
+                      webhook_secret:     credInput.webhook_secret,
+                      max_linked_games:   maxLinkedGames,
+                      slideshow_seconds:  slideshowSeconds,
+                    }}),
+                  });
+                  setCreds({ client_id: credInput.client_id, client_secret: credInput.client_secret });
                 }
               };
               window._nexusAdminSetDirty && window._nexusAdminSetDirty();
@@ -801,7 +882,7 @@
                 t === "digest"      ? "fa-solid fa-envelope-open-text" : "fa-solid fa-key",
                 style: { fontSize: 12 }
               }),
-              t === "games" ? "Games" : t === "genres" ? "Genres" : t === "stats" ? "Stats" : t === "digest" ? "Digest" : "Credentials"
+              t === "games" ? "Games" : t === "genres" ? "Genres" : t === "stats" ? "Stats" : t === "digest" ? "Digest" : "Settings"
             )
           )
         )
@@ -928,15 +1009,20 @@
           e("i", { className: "fa-solid fa-spinner fa-spin" }), " Loading\u2026"
         ),
         !genresLoading && genres.length === 0 && e("p", { className: "gp-empty" }, "No genres yet."),
-        !genresLoading && genres.length > 0 && e("div", { className: "gp-genre-list" },
+        !genresLoading && genres.length > 0 && e("div", { className: "gp-genre-card-grid" },
           genres.map(g =>
-            e("div", { key: g.id, className: "gp-genre-row" },
-              e("span", { className: "gp-genre-row-name" }, g.name),
+            e("div", { key: g.id, className: "gp-genre-card" },
+              e("div", { className: "gp-genre-card-name" }, g.name),
+              e("div", { className: "gp-genre-card-count" },
+                g.game_count !== undefined
+                  ? (g.game_count === 1 ? "1 game" : `${g.game_count} games`)
+                  : ""
+              ),
               e("button", {
-                className: "gp-admin-btn gp-admin-btn-danger",
+                className: "gp-genre-card-del",
                 title:     "Delete",
-                onClick:   () => deleteGenre(g),
-              }, e("i", { className: "fa-solid fa-trash" }))
+                onClick:   ev => { ev.stopPropagation(); deleteGenre(g); },
+              }, e("i", { className: "fa-solid fa-xmark", style: { fontSize: 10 } }))
             )
           )
         )
@@ -1022,32 +1108,77 @@
         )
       ),
 
-      // ── Credentials Tab ──────────────────────────────────────────────────────
-      tab === "credentials" && e("div", null,
-        e("p", { style: { fontSize: 12, color: "var(--t4)", marginBottom: 16 } },
-          "IGDB credentials are required to search and import games. Get them free at ",
-          e("a", { href: "https://dev.twitch.tv", target: "_blank", style: { color: "var(--ac)" } }, "dev.twitch.tv"), "."
-        ),
-        [
-          { key: "client_id",      label: "IGDB Client ID",     type: "text",     placeholder: "your_twitch_client_id" },
-          { key: "client_secret",  label: "IGDB Client Secret", type: "password", placeholder: "your_twitch_client_secret" },
-          { key: "webhook_secret", label: "Webhook Secret",     type: "password", placeholder: "optional — for webhook signature verification" },
-        ].map(field =>
-          e("div", { key: field.key, style: { marginBottom: 16 } },
-            e("label", { style: { fontSize: 12, color: "var(--t4)", display: "block", marginBottom: 6, fontWeight: 500 } }, field.label),
-            e("input", {
-              className:   "gp-input",
-              type:        field.type,
-              style:       { width: "100%" },
-              placeholder: field.placeholder,
-              value:       credInput[field.key],
-              onChange:    ev => setCredInput(p => ({ ...p, [field.key]: ev.target.value })),
-            })
+      // ── Settings Tab ─────────────────────────────────────────────────────────
+      tab === "settings" && e("div", null,
+
+        e("div", { className: "gp-settings-section" },
+          e("div", { className: "gp-settings-section-title" }, "IGDB credentials"),
+          e("p", { style: { fontSize: 12, color: "var(--t4)", marginBottom: 16 } },
+            "Required to search and import games. Get them free at ",
+            e("a", { href: "https://dev.twitch.tv", target: "_blank", style: { color: "var(--ac)" } }, "dev.twitch.tv"), "."
+          ),
+          [
+            { key: "client_id",      label: "Client ID",     type: "text",     placeholder: "your_twitch_client_id" },
+            { key: "client_secret",  label: "Client Secret", type: "password", placeholder: "your_twitch_client_secret" },
+            { key: "webhook_secret", label: "Webhook Secret",type: "password", placeholder: "optional" },
+          ].map(field =>
+            e("div", { key: field.key, style: { marginBottom: 14 } },
+              e("label", { style: { fontSize: 12, color: "var(--t4)", display: "block", marginBottom: 6, fontWeight: 500 } }, field.label),
+              e("input", {
+                className:   "gp-input",
+                type:        field.type,
+                style:       { width: "100%" },
+                placeholder: field.placeholder,
+                value:       credInput[field.key],
+                onChange:    ev => setCredInput(p => ({ ...p, [field.key]: ev.target.value })),
+              })
+            )
           )
         ),
-        e("p", { style: { fontSize: 12, color: "var(--t4)", marginTop: 8 } },
+
+        e("div", { className: "gp-settings-section" },
+          e("div", { className: "gp-settings-section-title" }, "Post sidebar"),
+          e("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
+            e("div", null,
+              e("label", { style: { fontSize: 12, color: "var(--t4)", display: "block", marginBottom: 6, fontWeight: 500 } }, "Max linked games per post"),
+              e("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                e("input", {
+                  className: "gp-input",
+                  type:      "number",
+                  min:       1, max: 10,
+                  style:     { width: 72 },
+                  value:     maxLinkedGames,
+                  onChange:  ev => {
+                    setMaxLinkedGames(Math.max(1, Math.min(10, parseInt(ev.target.value) || 3)));
+                    window._nexusAdminSetDirty && window._nexusAdminSetDirty();
+                  },
+                }),
+                e("span", { style: { fontSize: 12, color: "var(--t5)" } }, "games (default 3)")
+              )
+            ),
+            e("div", null,
+              e("label", { style: { fontSize: 12, color: "var(--t4)", display: "block", marginBottom: 6, fontWeight: 500 } }, "Slideshow timer"),
+              e("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                e("input", {
+                  className: "gp-input",
+                  type:      "number",
+                  min:       2, max: 30,
+                  style:     { width: 72 },
+                  value:     slideshowSeconds,
+                  onChange:  ev => {
+                    setSlideshowSeconds(Math.max(2, Math.min(30, parseInt(ev.target.value) || 5)));
+                    window._nexusAdminSetDirty && window._nexusAdminSetDirty();
+                  },
+                }),
+                e("span", { style: { fontSize: 12, color: "var(--t5)" } }, "seconds per game")
+              )
+            )
+          )
+        ),
+
+        e("p", { style: { fontSize: 12, color: "var(--t4)", marginTop: 4 } },
           e("i", { className: "fa-solid fa-info-circle", style: { marginRight: 5 } }),
-          "Use the Save Changes button above to save credentials."
+          "Use the Save Changes button above to save all settings."
         )
       ),
 
@@ -1723,16 +1854,24 @@
           e("div", { className: "gp-detail-threads" },
             posts.map(postId => {
               const post = postDetails[postId];
+              const author = post?.user;
+              const initials = author?.username ? author.username.slice(0, 2).toUpperCase() : "?";
               return e("div", {
                 key:       postId,
                 className: "gp-detail-thread-row",
                 onClick:   () => goToPost(postId),
               },
-                e("span", { className: "gp-detail-thread-name" },
-                  post ? post.title : `Post #${postId}`
-                ),
-                post && e("span", { className: "gp-detail-thread-meta" },
-                  `${post.reply_count || 0} repl${post.reply_count === 1 ? "y" : "ies"}`
+                author?.avatar_url
+                  ? e("img", { src: author.avatar_url, className: "gp-detail-thread-avatar", alt: author.username })
+                  : e("div", { className: "gp-detail-thread-avatar gp-detail-thread-avatar-init" }, initials),
+                e("div", { className: "gp-detail-thread-body" },
+                  e("span", { className: "gp-detail-thread-name" },
+                    post ? post.title : `Post #${postId}`
+                  ),
+                  post && e("span", { className: "gp-detail-thread-meta" },
+                    author ? `${author.username} · ` : "",
+                    `${post.reply_count || 0} repl${post.reply_count === 1 ? "y" : "ies"}`
+                  )
                 )
               );
             })
@@ -2169,6 +2308,27 @@
 .gp-genre-list{display:flex;flex-direction:column;gap:6px;}
 .gp-genre-row{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;}
 .gp-genre-row-name{font-size:13px;color:var(--t1);}
+.gp-genre-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;}
+.gp-genre-card{position:relative;background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;}
+.gp-genre-card:hover{border-color:rgba(255,255,255,.16);}
+.gp-genre-card-name{font-size:13px;font-weight:500;color:var(--t1);line-height:1.3;padding-right:18px;}
+.gp-genre-card-count{font-size:11px;color:var(--t4);}
+.gp-genre-card-del{position:absolute;top:7px;right:7px;width:20px;height:20px;border-radius:50%;border:none;background:transparent;color:var(--t4);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;opacity:0;}
+.gp-genre-card:hover .gp-genre-card-del{opacity:1;}
+.gp-genre-card-del:hover{background:rgba(248,113,113,.15);color:var(--red);}
+.gp-settings-section{background:var(--s1);border:0.5px solid var(--b1);border-radius:10px;padding:16px 20px;margin-bottom:14px;}
+.gp-settings-section-title{font-size:12px;font-weight:500;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;}
+.gp-psb-slideshow{margin:8px 0 6px;}
+.gp-psb-progress-bar{height:2px;background:rgba(255,255,255,.1);border-radius:2px;margin-bottom:8px;overflow:hidden;}
+.gp-psb-progress-fill{height:100%;background:var(--ac);border-radius:2px;transition:width .1s linear;}
+.gp-psb-dots{display:flex;justify-content:center;gap:5px;}
+.gp-psb-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer;transition:background .15s;}
+.gp-psb-dot.active{background:var(--ac);}
+.gp-detail-thread-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:0.5px solid var(--b1);cursor:pointer;}
+.gp-detail-thread-row:hover{background:rgba(255,255,255,.03);}
+.gp-detail-thread-avatar{width:28px;height:28px;border-radius:var(--av-radius);object-fit:cover;flex-shrink:0;}
+.gp-detail-thread-avatar-init{background:rgba(139,92,246,.2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:var(--ac);}
+.gp-detail-thread-body{flex:1;min-width:0;}
 .gp-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px;}
 .gp-stat-card{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;}
 .gp-stat-card.warn{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.05);}
