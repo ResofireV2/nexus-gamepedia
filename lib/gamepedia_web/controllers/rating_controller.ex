@@ -14,7 +14,7 @@ defmodule Gamepedia.RatingController do
       rating  = parse_int(rating_val)
       case Ratings.rate(user_id, game_id, rating) do
         {:ok, r}                -> json(conn, %{ok: true, rating: r, summary: Ratings.summary(game_id)})
-        {:error, :invalid_rating} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "Rating must be 1–10"})
+        {:error, :invalid_rating} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "Rating must be 1–5"})
         {:error, reason}        -> conn |> put_status(:unprocessable_entity) |> json(%{error: reason})
       end
     end

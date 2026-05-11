@@ -16,7 +16,7 @@ defmodule Gamepedia.Ratings do
   # ---------------------------------------------------------------------------
 
   def rate(user_id, game_id, rating)
-      when is_integer(rating) and rating >= 1 and rating <= 10 do
+      when is_integer(rating) and rating >= 1 and rating <= 5 do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     {_count, _} =
@@ -62,7 +62,7 @@ defmodule Gamepedia.Ratings do
     avg   = if count > 0, do: Float.round(Enum.sum(rows) / count, 1), else: nil
 
     distribution =
-      Enum.reduce(1..10, %{}, fn n, acc -> Map.put(acc, n, 0) end)
+      Enum.reduce(1..5, %{}, fn n, acc -> Map.put(acc, n, 0) end)
       |> then(fn base -> Enum.reduce(rows, base, fn r, acc -> Map.update(acc, r, 1, &(&1 + 1)) end) end)
       |> Enum.map(fn {score, cnt} -> %{score: score, count: cnt} end)
       |> Enum.sort_by(& &1.score)

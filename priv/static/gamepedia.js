@@ -1087,14 +1087,16 @@
         .finally(() => setSaving(false));
     }
 
-    return e("div", { className: "gp-modal-backdrop", onClick: e => { if (e.target === e.currentTarget) onClose(); } },
-      e("div", { className: "gp-modal" },
+    return e("div", { className: "gp-modal-overlay", onClick: e => { if (e.target === e.currentTarget) onClose(); } },
+      e("div", { className: "gp-modal", style: { maxWidth: 500 } },
         e("div", { className: "gp-modal-header" },
-          e("span", null, `Awards — ${game.name}`),
+          e("span", { className: "gp-modal-title" }, `Awards — ${game.name}`),
           e("button", { className: "gp-modal-close", onClick: onClose }, "\u00D7")
         ),
 
-        error && e("div", { style: { color: "var(--red)", fontSize: 13, padding: "0 0 10px" } }, error),
+        e("div", { style: { padding: "20px 20px 4px", overflowY: "auto", flex: 1 } },
+
+        error && e("div", { style: { color: "var(--red)", fontSize: 13, paddingBottom: 10 } }, error),
 
         // Existing awards list
         loading
@@ -1159,6 +1161,8 @@
             }, saving ? e("i", { className: "fa-solid fa-spinner fa-spin" }) : e("i", { className: "fa-solid fa-plus" }))
           )
         )
+
+        ) // end padded body wrapper
       )
     );
   }
@@ -1380,28 +1384,25 @@
       if (window._nexusNavigate) window._nexusNavigate("post", { id: postId });
     }
 
-    // 10-point number row renderer (used for rating input)
-    function RatingNumbers({ value, onHover, onLeave, onClick, hover }) {
+    // 5-star renderer (used for rating input and display)
+    function StarRow({ value, onHover, onLeave, onClick, hover, size }) {
+      const sz = size || 22;
       return e("div", { style: { display: "flex", gap: 4 } },
-        [1,2,3,4,5,6,7,8,9,10].map(n => {
-          const active = n <= (hover || value);
-          return e("div", {
-            key: n,
+        [1,2,3,4,5].map(star => {
+          const filled = star <= (hover || value);
+          return e("i", {
+            key: star,
+            className: filled ? "fa-solid fa-star" : "fa-regular fa-star",
             style: {
-              width: 26, height: 26,
-              borderRadius: 6,
-              background: active ? "var(--ac-bg)" : "rgba(255,255,255,.06)",
-              border: `0.5px solid ${active ? "var(--ac-border)" : "rgba(255,255,255,.1)"}`,
-              color: active ? "var(--ac-text)" : "var(--t4)",
-              fontSize: 12, fontWeight: active ? 600 : 400,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
-              transition: "all .12s",
+              fontSize: sz,
+              color: filled ? "#a78bfa" : "rgba(255,255,255,.2)",
+              cursor: onClick ? "pointer" : "default",
+              transition: "color .1s",
             },
-            onMouseEnter: onHover ? () => onHover(n) : undefined,
+            onMouseEnter: onHover ? () => onHover(star) : undefined,
             onMouseLeave: onLeave || undefined,
-            onClick: onClick ? () => onClick(n) : undefined,
-          }, n);
+            onClick: onClick ? () => onClick(star) : undefined,
+          });
         })
       );
     }
@@ -1489,7 +1490,7 @@
                   : null,
                 ratingAvg
                   ? e("span", { style: { fontSize: 11, color: "rgba(255,255,255,.35)" } },
-                      `/ 10 \u00B7 ${ratingCount} rating${ratingCount === 1 ? "" : "s"}`
+                      `/ 5 \u00B7 ${ratingCount} rating${ratingCount === 1 ? "" : "s"}`
                     )
                   : e("span", { style: { fontSize: 12, color: "rgba(255,255,255,.3)" } }, "No ratings yet")
               ),
@@ -1497,12 +1498,13 @@
 
               // User rating input
               currentUser && e("div", { style: { marginTop: 10 } },
-                e("div", { style: { fontSize: 11, color: "rgba(255,255,255,.4)", marginBottom: 5 } },
-                  userRating > 0 ? `Your rating: ${userRating}/10 (click to change or re-click to remove)` : "Rate this game:"
+                e("div", { style: { fontSize: 11, color: "rgba(255,255,255,.4)", marginBottom: 6 } },
+                  userRating > 0 ? `Your rating: ${userRating}/5 · click again to remove` : "Rate this game:"
                 ),
-                e(RatingNumbers, {
+                e(StarRow, {
                   value:   userRating,
                   hover:   hoverRating,
+                  size:    24,
                   onHover: n => setHoverRating(n),
                   onLeave: () => setHoverRating(0),
                   onClick: submitRating,
