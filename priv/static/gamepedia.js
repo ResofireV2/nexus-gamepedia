@@ -645,6 +645,14 @@
     const [credSaving,   setCredSaving]  = useState(false);
     const [credSaved,    setCredSaved]   = useState(false);
 
+    // Digest tab state — counts per section
+    const [digestCfg,    setDigestCfg]   = useState({
+      new_games_count:      6,
+      top_gamelogs_count:   6,
+      most_discussed_count: 6,
+    });
+    const [digestLoaded, setDigestLoaded] = useState(false);
+
     useEffect(() => {
       // Load saved IGDB credentials from extension settings
       fetch("/api/v1/admin/extensions/gamepedia", { headers: authHeaders() })
@@ -658,6 +666,12 @@
           };
           setCreds({ client_id: loaded.client_id, client_secret: loaded.client_secret });
           setCredInput(loaded);
+          setDigestCfg({
+            new_games_count:      parseInt(s.digest_new_games_count)      || 6,
+            top_gamelogs_count:   parseInt(s.digest_top_gamelogs_count)   || 6,
+            most_discussed_count: parseInt(s.digest_most_discussed_count) || 6,
+          });
+          setDigestLoaded(true);
         })
         .catch(() => {});
       loadGames(1);
@@ -746,20 +760,48 @@
 
       // Tabs
       e("div", { className: "gp-admin-tabs" },
-        ["games", "genres", "stats", "credentials"].map(t =>
+        ["games", "genres", "stats", "digest", "credentials"].map(t =>
           e("button", {
             key:       t,
             className: "gp-admin-tab" + (tab === t ? " active" : ""),
-            onClick:   () => { setTab(t); if (t === "stats" && !stats) loadStats(); },
+            onClick:   () => {
+              setTab(t);
+              if (t === "stats" && !stats) loadStats();
+              // Wire the top-bar Save Changes button to save extension settings
+              window._nexusAdminSaveFn = async () => {
+                if (t === "credentials") {
+                  await fetch("/api/v1/admin/extensions/gamepedia/settings", {
+                    method: "PATCH", headers: authHeaders(),
+                    body: JSON.stringify({ settings: {
+                      igdb_client_id:     credInput.client_id,
+                      igdb_client_secret: credInput.client_secret,
+                      webhook_secret:     credInput.webhook_secret,
+                    }}),
+                  });
+                  setCreds({ client_id: credInput.client_id, client_secret: credInput.client_secret });
+                } else if (t === "digest") {
+                  await fetch("/api/v1/admin/extensions/gamepedia/settings", {
+                    method: "PATCH", headers: authHeaders(),
+                    body: JSON.stringify({ settings: {
+                      digest_new_games_count:      digestCfg.new_games_count,
+                      digest_top_gamelogs_count:   digestCfg.top_gamelogs_count,
+                      digest_most_discussed_count: digestCfg.most_discussed_count,
+                    }}),
+                  });
+                }
+              };
+              window._nexusAdminSetDirty && window._nexusAdminSetDirty();
+            },
           },
             e("span", { style: { display: "flex", alignItems: "center", gap: 6 } },
               e("i", { className:
                 t === "games"       ? "fa-solid fa-gamepad" :
                 t === "genres"      ? "fa-solid fa-tags" :
-                t === "stats"       ? "fa-solid fa-chart-bar" : "fa-solid fa-key",
+                t === "stats"       ? "fa-solid fa-chart-bar" :
+                t === "digest"      ? "fa-solid fa-envelope-open-text" : "fa-solid fa-key",
                 style: { fontSize: 12 }
               }),
-              t === "games" ? "Games" : t === "genres" ? "Genres" : t === "stats" ? "Stats" : "Credentials"
+              t === "games" ? "Games" : t === "genres" ? "Genres" : t === "stats" ? "Stats" : t === "digest" ? "Digest" : "Credentials"
             )
           )
         )
@@ -941,6 +983,45 @@
       ),
 
       // ── Add Game Modal ─────────────────────────────────────────────────────
+      // ── Digest Tab ───────────────────────────────────────────────────────────
+      tab === "digest" && e("div", null,
+        e("p", { style: { fontSize: 12, color: "var(--t4)", marginBottom: 20 } },
+          "Configure how many games appear in each digest email section. Changes are saved via the Save Changes button above."
+        ),
+        [
+          { key: "new_games_count",      icon: "fa-sparkles",          label: "New Games",      desc: "Games added to the library during the digest period." },
+          { key: "top_gamelogs_count",   icon: "fa-bookmark",          label: "Most Gamelog’d", desc: "Games with the most new gamelog entries during the period." },
+          { key: "most_discussed_count", icon: "fa-comments",          label: "Most Discussed", desc: "Games linked to the most forum threads during the period." },
+        ].map(section =>
+          e("div", { key: section.key, style: { background: "var(--s1)", border: "0.5px solid var(--b1)", borderRadius: 10, padding: "16px 20px", marginBottom: 12 } },
+            e("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 4 } },
+              e("div", { style: { width: 30, height: 30, borderRadius: 8, background: "rgba(139,92,246,.12)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ac)", flexShrink: 0 } },
+                e("i", { className: "fa-solid " + section.icon, style: { fontSize: 13 } })
+              ),
+              e("span", { style: { fontSize: 13, fontWeight: 500, color: "var(--t1)" } }, section.label)
+            ),
+            e("p", { style: { fontSize: 12, color: "var(--t4)", margin: "0 0 14px 40px" } }, section.desc),
+            e("div", { style: { display: "flex", alignItems: "center", gap: 10, marginLeft: 40 } },
+              e("span", { style: { fontSize: 12, fontWeight: 500, color: "var(--t4)", textTransform: "uppercase", letterSpacing: ".06em", width: 130 } }, "Games to show"),
+              e("input", {
+                className: "gp-input",
+                type:      "number",
+                min:       1,
+                max:       20,
+                style:     { width: 64, textAlign: "center" },
+                value:     digestCfg[section.key],
+                onChange:  ev => {
+                  const v = Math.max(1, Math.min(20, parseInt(ev.target.value) || 6));
+                  setDigestCfg(p => ({ ...p, [section.key]: v }));
+                  window._nexusAdminSetDirty && window._nexusAdminSetDirty();
+                },
+              }),
+              e("span", { style: { fontSize: 12, color: "var(--t5)" } }, "max per digest")
+            )
+          )
+        )
+      ),
+
       // ── Credentials Tab ──────────────────────────────────────────────────────
       tab === "credentials" && e("div", null,
         e("p", { style: { fontSize: 12, color: "var(--t4)", marginBottom: 16 } },
@@ -964,32 +1045,9 @@
             })
           )
         ),
-        e("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
-          e("button", {
-            className: "gp-btn-primary",
-            disabled:  credSaving,
-            onClick:   () => {
-              setCredSaving(true); setCredSaved(false);
-              fetch("/api/v1/admin/extensions/gamepedia/settings", {
-                method: "PATCH",
-                headers: authHeaders(),
-                body: JSON.stringify({ settings: {
-                  igdb_client_id:     credInput.client_id,
-                  igdb_client_secret: credInput.client_secret,
-                  webhook_secret:     credInput.webhook_secret,
-                }}),
-              })
-                .then(r => r.json())
-                .then(() => {
-                  setCreds({ client_id: credInput.client_id, client_secret: credInput.client_secret });
-                  setCredSaved(true); setCredSaving(false);
-                })
-                .catch(() => setCredSaving(false));
-            },
-          }, credSaving ? "Saving…" : "Save Credentials"),
-          credSaved && e("span", { style: { fontSize: 12, color: "var(--green)" } },
-            e("i", { className: "fa-solid fa-check", style: { marginRight: 5 } }), " Saved"
-          )
+        e("p", { style: { fontSize: 12, color: "var(--t4)", marginTop: 8 } },
+          e("i", { className: "fa-solid fa-info-circle", style: { marginRight: 5 } }),
+          "Use the Save Changes button above to save credentials."
         )
       ),
 

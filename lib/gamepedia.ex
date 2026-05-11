@@ -109,6 +109,21 @@ defmodule Gamepedia do
         "secret"      => true,
         "required"    => true,
       },
+      "digest_new_games_count" => %{
+        "type"    => "integer",
+        "label"   => "New Games digest count",
+        "default" => 6,
+      },
+      "digest_top_gamelogs_count" => %{
+        "type"    => "integer",
+        "label"   => "Most Gamelog'd digest count",
+        "default" => 6,
+      },
+      "digest_most_discussed_count" => %{
+        "type"    => "integer",
+        "label"   => "Most Discussed digest count",
+        "default" => 6,
+      },
     }
   end
 
@@ -143,17 +158,27 @@ defmodule Gamepedia do
         icon:               "fa-star",
         enabled_by_default: true,
       },
+      %{
+        key:                "gamepedia_most_discussed",
+        label:              "Most Discussed",
+        icon:               "fa-comments",
+        enabled_by_default: true,
+      },
     ]
   end
 
   @impl true
-  def handle_digest_section("gamepedia_new_games", period, _settings) do
-    Gamepedia.Digest.new_games(period)
+  def handle_digest_section("gamepedia_new_games", period, settings, branding) do
+    Gamepedia.Digest.new_games(period, settings, branding)
   end
 
-  def handle_digest_section("gamepedia_top_gamelogs", period, _settings) do
-    Gamepedia.Digest.top_gamelogs(period)
+  def handle_digest_section("gamepedia_top_gamelogs", period, settings, branding) do
+    Gamepedia.Digest.top_gamelogs(period, settings, branding)
   end
 
-  def handle_digest_section(_key, _period, _settings), do: %{items: []}
+  def handle_digest_section("gamepedia_most_discussed", period, settings, branding) do
+    Gamepedia.Digest.most_discussed(period, settings, branding)
+  end
+
+  def handle_digest_section(_key, _period, _settings, _branding), do: %{items: []}
 end
