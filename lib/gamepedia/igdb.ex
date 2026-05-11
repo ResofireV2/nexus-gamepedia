@@ -204,12 +204,33 @@ defmodule Gamepedia.Igdb do
   defp extract_trailer_id(videos) do
     priorities = ["trailer", "reveal"]
 
-    Enum.find_value(priorities, fn keyword ->
-      Enum.find_value(videos, fn v ->
-        name = String.downcase(v["name"] || "")
-        if String.contains?(name, keyword), do: v["video_id"]
+    # Collect all candidate video IDs in priority order
+    candidates =
+      Enum.flat_map(priorities, fn keyword ->
+        Enum.filter(videos, fn v ->
+          name = String.downcase(v["name"] || "")
+          String.contains?(name, keyword)
+        end)
       end)
-    end) || get_in(List.first(videos), ["video_id"])
+      |> Enum.map(& &1["video_id"])
+      |> Enum.uniq()
+
+    # Fallback: any video if no priority match
+    candidates = if candidates == [] do
+      videos |> Enum.map(& &1["video_id"]) |> Enum.reject(&is_nil/1)
+    else
+      candidates
+    end
+
+    # Pick the first candidate that has a maxresdefault thumbnail available.
+    # Falls back to the first candidate if none have it (client-side onError handles hqdefault).
+    Enum.find(candidates, List.first(candidates), fn video_id ->
+      url = "https://i.ytimg.com/vi/#{video_id}/maxresdefault.jpg"
+      case Req.head(url, receive_timeout: 3_000) do
+        {:ok, %{status: 200}} -> true
+        _                     -> false
+      end
+    end)
   end
 
   defp extract_screenshots(game, limit \\ 8) do
