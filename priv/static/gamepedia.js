@@ -1092,7 +1092,7 @@
     function doSearch(q) {
       if (!q || q.length < 2) { setResults([]); return; }
       setLoading(true); setError(null);
-      fetch(`/ext/gamepedia/games/search?q=${encodeURIComponent(q)}&client_id=${encodeURIComponent(creds.client_id)}&client_secret=${encodeURIComponent(creds.client_secret)}`)
+      fetch(`/ext/gamepedia/api/games/search?q=${encodeURIComponent(q)}&client_id=${encodeURIComponent(creds.client_id)}&client_secret=${encodeURIComponent(creds.client_secret)}`)
         .then(r => r.json())
         .then(r => { setLoading(false); setResults(r.data || []); if (r.error) setError(r.error); })
         .catch(() => { setLoading(false); setError("Search failed."); });
@@ -1100,7 +1100,7 @@
 
     function addGame(game) {
       setAdding(p => ({ ...p, [game.igdb_id]: true }));
-      fetch("/ext/gamepedia/admin/games/import", {
+      fetch("/ext/gamepedia/api/admin/games/import", {
         method:  "POST",
         headers: authHeaders(),
         body:    JSON.stringify({ igdb_id: game.igdb_id, client_id: creds.client_id, client_secret: creds.client_secret }),
@@ -1328,7 +1328,7 @@
 
     function save() {
       setSaving(true);
-      fetch(`/ext/gamepedia/admin/games/${game.id}/genres`, {
+      fetch(`/ext/gamepedia/api/admin/games/${game.id}/genres`, {
         method:  "POST",
         headers: authHeaders(),
         body:    JSON.stringify({ genre_ids: Array.from(sel) }),
