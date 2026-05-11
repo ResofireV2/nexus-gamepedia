@@ -1780,8 +1780,10 @@
   // post_footer slot — shows linked games below post content
   NE.registerSlot("post_footer", GamepediaPostGames, 50);
 
-  // profile_sidebar slot — Gamelog link on user profiles
-  NE.registerSlot("profile_sidebar", GamepediaGamelogLink, 50);
+  // profile_tab slot — Gamelog tab on user profiles
+  // tabLabel is read by Nexus to render the tab label
+  GamelogPage.tabLabel = "Gamelog";
+  NE.registerSlot("profile_tab", GamelogPage, 50);
 
   // SPA route — gamelog page
   NE.registerRoute("/ext/gamepedia/gamelog/:user_id", GamelogPage, { title: "Gamelog" });
