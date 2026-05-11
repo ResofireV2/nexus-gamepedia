@@ -6,7 +6,7 @@ defmodule Gamepedia.Router do
     plug :fetch_query_params
   end
 
-  scope "/api", Gamepedia do
+  scope "/", Gamepedia do
     pipe_through :api
 
     # Public — game library
