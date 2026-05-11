@@ -484,25 +484,38 @@
       // Stats bar
       stats && e("div", { className: "gp-gl-stats" },
         stats.playing && e("div", { className: "gp-gl-stats-playing" },
+          e("i", { className: "fa-solid fa-play", style: { fontSize: 10 } }),
           e("span", { className: "gp-gl-stats-playing-label" }, "Currently playing"),
           e("span", { className: "gp-gl-stats-playing-name" }, stats.playing.name)
         ),
-        e("div", { className: "gp-gl-stats-row" },
-          e("div", { className: "gp-gl-stat" },
+        e("div", { className: "gp-gl-stat-grid" },
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(139,92,246,.12)", color: "var(--ac)" } },
+              e("i", { className: "fa-solid fa-gamepad", style: { fontSize: 13 } })
+            ),
             e("div", { className: "gp-gl-stat-n" }, stats.total),
-            e("div", { className: "gp-gl-stat-l" }, "games")
+            e("div", { className: "gp-gl-stat-l" }, "Games")
           ),
-          e("div", { className: "gp-gl-stat" },
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(52,211,153,.12)", color: "#34d399" } },
+              e("i", { className: "fa-solid fa-calendar", style: { fontSize: 13 } })
+            ),
             e("div", { className: "gp-gl-stat-n" }, stats.added_this_month),
-            e("div", { className: "gp-gl-stat-l" }, "this month")
+            e("div", { className: "gp-gl-stat-l" }, "This month")
           ),
-          stats.top_genre && e("div", { className: "gp-gl-stat" },
-            e("div", { className: "gp-gl-stat-n" }, stats.top_genre.name),
-            e("div", { className: "gp-gl-stat-l" }, "top genre")
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(96,165,250,.12)", color: "#60a5fa" } },
+              e("i", { className: "fa-solid fa-tags", style: { fontSize: 13 } })
+            ),
+            e("div", { className: "gp-gl-stat-n" }, stats.top_genre ? stats.top_genre.name : "—"),
+            e("div", { className: "gp-gl-stat-l" }, "Top genre")
           ),
-          stats.oldest && e("div", { className: "gp-gl-stat" },
-            e("div", { className: "gp-gl-stat-n" }, stats.oldest.name),
-            e("div", { className: "gp-gl-stat-l" }, `oldest \u00B7 ${stats.oldest.year}`)
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(251,191,36,.12)", color: "#fbbf24" } },
+              e("i", { className: "fa-solid fa-clock-rotate-left", style: { fontSize: 13 } })
+            ),
+            e("div", { className: "gp-gl-stat-n" }, stats.oldest ? stats.oldest.name : "—"),
+            e("div", { className: "gp-gl-stat-l" }, stats.oldest ? `Oldest \u00B7 ${stats.oldest.year}` : "Oldest")
           )
         )
       ),
@@ -2215,14 +2228,15 @@
 
 /* ── Gamelog page ── */
 .gp-gamelog-page{padding:16px 0;}
-.gp-gl-stats{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
-.gp-gl-stats-playing{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:10px;border-bottom:0.5px solid rgba(255,255,255,.06);}
-.gp-gl-stats-playing-label{font-size:11px;color:var(--ac);font-weight:500;text-transform:uppercase;letter-spacing:.06em;}
+.gp-gl-stats{margin-bottom:16px;}
+.gp-gl-stats-playing{display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(139,92,246,.08);border:0.5px solid rgba(139,92,246,.2);border-radius:10px;margin-bottom:12px;}
+.gp-gl-stats-playing-label{font-size:10px;color:var(--ac);font-weight:500;text-transform:uppercase;letter-spacing:.07em;}
 .gp-gl-stats-playing-name{font-size:13px;color:var(--t1);font-weight:500;}
-.gp-gl-stats-row{display:flex;gap:16px;flex-wrap:wrap;}
-.gp-gl-stat{min-width:70px;}
-.gp-gl-stat-n{font-size:15px;font-weight:600;color:var(--t1);}
-.gp-gl-stat-l{font-size:11px;color:var(--t4);margin-top:1px;}
+.gp-gl-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.gp-gl-stat-card{background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px;}
+.gp-gl-stat-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+.gp-gl-stat-n{font-size:16px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-gl-stat-l{font-size:11px;color:var(--t4);margin-top:2px;}
 .gp-gl-filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .gp-gl-filters .gp-input{flex:1;min-width:120px;}
 .gp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;}
