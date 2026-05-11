@@ -2154,7 +2154,7 @@
   }, 50);
 
   // post_footer slot — shows linked games below post content
-  NE.registerSlot("post_sidebar", PostSidebarGameCard, 50);
+  NE.registerSlot("post_sidebar", PostSidebarGameCard, 200);
 
   // profile_tab slot — Gamelog tab on user profiles
   // tabLabel is read by Nexus to render the tab label
