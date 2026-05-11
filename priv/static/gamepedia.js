@@ -1017,61 +1017,90 @@
   // ---------------------------------------------------------------------------
 
   function EditGenresModal({ game, genres, onSaved, onClose }) {
-    const [selected, setSelected] = useState(new Set((game.genres || []).map(g => g.id)));
-    const [saving,   setSaving]   = useState(false);
+    const [sel,    setSel]    = useState(new Set((game.genres || []).map(g => g.id)));
+    const [saving, setSaving] = useState(false);
+
+    function toggle(id) {
+      setSel(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    }
 
     function save() {
       setSaving(true);
       fetch(`/ext/gamepedia/admin/games/${game.id}/genres`, {
         method:  "POST",
         headers: authHeaders(),
-        body:    JSON.stringify({ genre_ids: Array.from(selected) }),
+        body:    JSON.stringify({ genre_ids: Array.from(sel) }),
       })
-        .then(() => {
-          const updatedGenres = genres.filter(g => selected.has(g.id));
-          onSaved({ ...game, genres: updatedGenres });
-        })
+        .then(() => { onSaved({ ...game, genres: genres.filter(g => sel.has(g.id)) }); })
         .catch(() => alert("Failed to save genres."))
         .finally(() => setSaving(false));
     }
 
     return e("div", {
-      className: "gp-modal-overlay",
+      style: { position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9000,
+               display:"flex",alignItems:"center",justifyContent:"center",padding:24 },
       onMouseDown: ev => { if (ev.target === ev.currentTarget) onClose(); },
     },
-      e("div", { className: "gp-modal gp-modal-sm" },
-        e("div", { className: "gp-modal-header" },
-          e("span", { className: "gp-modal-title" }, `Genres \u2014 ${game.name}`),
-          e("button", { className: "gp-modal-close", onClick: onClose }, "\u2715")
+      e("div", {
+        style: { background:"var(--s1)",border:"0.5px solid var(--b2)",borderRadius:16,
+                 width:"100%",maxWidth:560,boxShadow:"0 8px 48px rgba(0,0,0,.6)" }
+      },
+        e("div", {
+          style: { display:"flex",alignItems:"center",justifyContent:"space-between",
+                   padding:"18px 24px",borderBottom:"0.5px solid var(--b1)" }
+        },
+          e("span", { style:{ fontSize:16,fontWeight:500,color:"var(--t1)" } },
+            `Genres — ${game.name}`),
+          e("button", {
+            onClick: onClose,
+            style: { background:"none",border:"none",color:"var(--t4)",fontSize:20,cursor:"pointer",lineHeight:1 }
+          }, "×")
         ),
-        e("div", { className: "gp-genre-checklist" },
-          genres.length === 0 && e("p", { className: "gp-modal-empty" },
-            "No genres yet. Create some in the Genres tab."
-          ),
-          genres.map(g =>
-            e("label", { key: g.id, className: "gp-genre-check-row" },
-              e("input", {
-                type:     "checkbox",
-                checked:  selected.has(g.id),
-                onChange: ev => {
-                  const next = new Set(selected);
-                  ev.target.checked ? next.add(g.id) : next.delete(g.id);
-                  setSelected(next);
+        e("div", {
+          style: { padding:"16px 24px",display:"grid",
+                   gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",
+                   gap:10,maxHeight:360,overflowY:"auto" }
+        },
+          genres.length === 0
+            ? e("p", { style:{ fontSize:13,color:"var(--t4)",gridColumn:"1/-1",textAlign:"center",padding:"20px 0" } },
+                "No genres yet. Create some in the Genres tab.")
+            : genres.map(g => {
+                const active = sel.has(g.id);
+                return e("div", {
+                  key: g.id, onClick: () => toggle(g.id),
+                  style: {
+                    padding:"10px 14px",borderRadius:10,cursor:"pointer",
+                    border:"1.5px solid " + (active ? "var(--ac)" : "var(--b1)"),
+                    background: active ? "rgba(167,139,250,0.12)" : "var(--s2)",
+                    color: active ? "var(--ac)" : "var(--t3)",
+                    transition:"all .1s",display:"flex",alignItems:"center",gap:8,
+                    fontSize:14,fontWeight: active ? 500 : 400,
+                  }
                 },
-              }),
-              " ", g.name
-            )
-          )
+                  active && e("i", { className:"fa-solid fa-check", style:{ fontSize:12,flexShrink:0 } }),
+                  g.name
+                );
+              })
         ),
-        e("div", { className: "gp-modal-footer" },
-          e("button", { className: "gp-btn-primary", disabled: saving, onClick: save },
-            saving ? "Saving\u2026" : "Save Genres"
-          )
+        e("div", {
+          style: { padding:"16px 24px",borderTop:"0.5px solid var(--b1)",
+                   display:"flex",justifyContent:"flex-end",gap:10 }
+        },
+          e("button", {
+            onClick: () => setSel(new Set()),
+            style: { background:"none",border:"0.5px solid var(--b2)",borderRadius:8,
+                     color:"var(--t3)",cursor:"pointer",fontSize:14,padding:"8px 16px",fontFamily:"inherit" }
+          }, "Clear"),
+          e("button", {
+            onClick: save, disabled: saving,
+            style: { background:"var(--ac)",border:"none",borderRadius:8,color:"#fff",
+                     cursor: saving ? "default" : "pointer",fontSize:14,fontWeight:500,
+                     padding:"8px 20px",fontFamily:"inherit",opacity: saving ? 0.6 : 1 }
+          }, saving ? "Saving…" : sel.size > 0 ? `Save ${sel.size} genre${sel.size > 1 ? "s" : ""}` : "Save")
         )
       )
     );
   }
-
   // ---------------------------------------------------------------------------
   // Game Detail Page — /ext/gamepedia/games/:slug
   // ---------------------------------------------------------------------------
