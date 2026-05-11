@@ -85,7 +85,7 @@
   function apiFetch(path, opts = {}) {
     return fetch(BASE + path, {
       ...opts,
-      headers: { ...authHeaders(), ...(opts.headers || {}) },
+      headers: { "Accept": "application/json", ...authHeaders(), ...(opts.headers || {}) },
       body:    opts.body ? JSON.stringify(opts.body) : undefined,
     }).then(r => r.json());
   }
