@@ -40,7 +40,8 @@ defmodule Gamepedia.GameController do
         user_rating    = if user_id > 0, do: Gamepedia.Ratings.user_rating(user_id, game.id), else: nil
         awards         = Gamepedia.Awards.list_for_game(game.id)
         gamelog_count  = Games.gamelog_count(game.id)
-        json(conn, %{data: game_detail(game, rating_summary, user_rating, awards, gamelog_count)})
+        thread_count   = Gamepedia.PostGames.thread_count(game.id)
+        json(conn, %{data: game_detail(game, rating_summary, user_rating, awards, gamelog_count, thread_count)})
     end
   end
 
@@ -56,7 +57,7 @@ defmodule Gamepedia.GameController do
     }
   end
 
-  def game_detail(game, rating_summary \\ %{count: 0, avg: nil, distribution: []}, user_rating \\ nil, awards \\ [], gamelog_count \\ 0) do
+  def game_detail(game, rating_summary \\ %{count: 0, avg: nil, distribution: []}, user_rating \\ nil, awards \\ [], gamelog_count \\ 0, thread_count \\ 0) do
     %{
       id:                 game.id,
       igdb_id:            game.igdb_id,
@@ -77,6 +78,7 @@ defmodule Gamepedia.GameController do
       user_rating:        user_rating,
       awards:             awards,
       gamelog_count:      gamelog_count,
+      thread_count:       thread_count,
     }
   end
 

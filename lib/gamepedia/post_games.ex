@@ -69,6 +69,11 @@ defmodule Gamepedia.PostGames do
     |> Repo.all()
   end
 
+  def thread_count(game_id) do
+    from(pg in @post_game_table, where: pg.game_id == ^game_id)
+    |> Repo.aggregate(:count)
+  end
+
   def delete_links_for_post(post_id) do
     from(pg in @post_game_table, where: pg.post_id == ^post_id)
     |> Repo.delete_all()

@@ -3,7 +3,7 @@
  *
  * Registers with NexusExtensions:
  *   registerToolbarButton   — gamepad button in post composer
- *   registerSlot            — post_footer (linked games), profile_sidebar (gamelog link)
+ *   registerSlot            — post_sidebar (game card in post right sidebar), profile_tab (gamelog)
  *   registerRoute           — /gamepedia/users/:username (gamelog page)
  *   registerAdminPanel      — Gamepedia admin (games, genres, stats)
  *   registerExploreItem     — Browse Games in left sidebar
@@ -198,51 +198,140 @@
   }
 
   // ---------------------------------------------------------------------------
-  // post_footer slot — GamepediaPostGames
-  // Receives: { postId }
+  // post_sidebar slot — PostSidebarGameCard
+  // Renders the Option A cover-led card in the post right sidebar.
+  // Receives: { postId, currentUser, navigate }
   // ---------------------------------------------------------------------------
 
-  function GamepediaPostGames({ postId }) {
-    const [games,   setGames]   = useState(null);
-    const [loading, setLoading] = useState(true);
+  function PostSidebarGameCard({ postId, currentUser, navigate }) {
+    const [game,       setGame]       = useState(null);
+    const [inGamelog,  setInGamelog]  = useState(false);
+    const [logBusy,    setLogBusy]    = useState(false);
 
     useEffect(() => {
       if (!postId) return;
+      setGame(null); setInGamelog(false);
+
+      // Fetch the first linked game for this post, then get full detail
       apiFetch(`/posts/${postId}/games`)
-        .then(r => { setGames(r.data || []); setLoading(false); })
-        .catch(() => setLoading(false));
+        .then(r => {
+          const first = (r.data || [])[0];
+          if (!first) return;
+          // Fetch full game detail for ratings, awards, gamelog count
+          apiFetch(`/games/${first.slug}`)
+            .then(gr => {
+              if (gr.data) setGame(gr.data);
+            })
+            .catch(() => setGame(first));
+        })
+        .catch(() => {});
     }, [postId]);
 
-    if (loading || !games || games.length === 0) return null;
+    useEffect(() => {
+      if (!game || !currentUser) return;
+      apiFetch(`/gamelog/${currentUser.id}`)
+        .then(gr => {
+          const entry = (gr.data || []).find(g => g.id === game.id);
+          if (entry) setInGamelog(true);
+        })
+        .catch(() => {});
+    }, [game, currentUser]);
 
-    return e("div", { className: "gp-post-games" },
-      e("div", { className: "gp-post-games-label" },
-        e("i", { className: "fa-solid fa-gamepad", style: { marginRight: 6 } }),
-        "Linked Games"
-      ),
-      e("div", { className: "gp-post-games-list" },
-        games.map(game =>
-          e("a", {
-            key:       game.id,
-            className: "gp-game-card",
-            href:      "#",
-            onClick:   ev => {
-              ev.preventDefault();
-              if (window._nexusNavigate)
-                window._nexusNavigate("ext-route",
-                  { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
-            },
-          },
-            game.cover_image_url
-              ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-game-card-cover" })
-              : e("div", { className: "gp-game-card-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
-            e("div", { className: "gp-game-card-info" },
-              e("div", { className: "gp-game-card-name" }, game.name),
-              game.release_year ? e("div", { className: "gp-game-card-year" }, String(game.release_year)) : null,
-              game.developer    ? e("div", { className: "gp-game-card-dev"  }, game.developer)            : null
+    function toggleGamelog() {
+      if (!currentUser || !game) return;
+      setLogBusy(true);
+      if (inGamelog) {
+        apiFetch(`/gamelog/${game.id}`, { method: "DELETE" })
+          .then(() => setInGamelog(false))
+          .finally(() => setLogBusy(false));
+      } else {
+        apiFetch("/gamelog", { method: "POST", body: { game_id: game.id } })
+          .then(() => setInGamelog(true))
+          .finally(() => setLogBusy(false));
+      }
+    }
+
+    function goToGame() {
+      if (!game) return;
+      if (window._nexusNavigate)
+        window._nexusNavigate("ext-route",
+          { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
+    }
+
+    if (!game) return null;
+
+    const awards = game.awards || [];
+
+    return e("div", { className: "gp-psb" },
+      e("div", { className: "gp-rw-label" }, "linked game"),
+
+      // Cover art with genre + title overlay
+      e("div", { className: "gp-psb-cover-wrap", onClick: goToGame },
+        game.cover_image_url
+          ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-psb-cover-img" })
+          : e("div", { className: "gp-psb-cover-empty" },
+              e("i", { className: "fa-solid fa-gamepad" })
+            ),
+        e("div", { className: "gp-psb-overlay" }),
+        e("div", { className: "gp-psb-cover-bottom" },
+          game.genres?.length > 0 && e("div", { className: "gp-psb-genres" },
+            game.genres.slice(0, 2).map(g =>
+              e("span", { key: g.id, className: "gp-psb-genre-pill" }, g.name)
             )
+          ),
+          e("div", { className: "gp-psb-name" }, game.name),
+          e("div", { className: "gp-psb-sub" },
+            [game.developer, game.publisher, game.release_year]
+              .filter(Boolean).map(String)
+              .slice(0, 2).join(" · ")
           )
         )
+      ),
+
+      // Awards
+      awards.length > 0 && e("div", { className: "gp-psb-awards" },
+        awards.slice(0, 2).map(a =>
+          e("div", { key: a.id, className: "gp-psb-award" },
+            e("i", { className: "fa-solid fa-trophy", style: { fontSize: 9, marginRight: 4 } }),
+            a.title,
+            e("span", { className: "gp-psb-award-year" }, a.year)
+          )
+        )
+      ),
+
+      // Stats row
+      e("div", { className: "gp-psb-stats" },
+        e("div", { className: "gp-psb-stat" },
+          e("div", { className: "gp-psb-stat-n" },
+            game.rating_avg
+              ? e("span", null, e("i", { className: "fa-solid fa-star", style: { fontSize: 10, marginRight: 2, color: "#a78bfa" } }), game.rating_avg.toFixed(1))
+              : e("span", { style: { fontSize: 10 } }, "—")
+          ),
+          e("div", { className: "gp-psb-stat-l" }, "rating")
+        ),
+        e("div", { className: "gp-psb-stat" },
+          e("div", { className: "gp-psb-stat-n" }, game.gamelog_count ?? "—"),
+          e("div", { className: "gp-psb-stat-l" }, "gamelogs")
+        ),
+        e("div", { className: "gp-psb-stat" },
+          e("div", { className: "gp-psb-stat-n" }, game.thread_count ?? "—"),
+          e("div", { className: "gp-psb-stat-l" }, "threads")
+        )
+      ),
+
+      // Actions
+      e("div", { className: "gp-psb-btn gp-psb-btn-view", onClick: goToGame },
+        "View in Gamepedia ",
+        e("i", { className: "fa-solid fa-arrow-right", style: { fontSize: 10 } })
+      ),
+      currentUser && e("div", {
+        className: "gp-psb-btn " + (inGamelog ? "gp-psb-btn-added" : "gp-psb-btn-log"),
+        onClick:   logBusy ? undefined : toggleGamelog,
+        style:     logBusy ? { opacity: .5 } : {},
+      },
+        inGamelog
+          ? e("span", null, e("i", { className: "fa-solid fa-check", style: { marginRight: 5 } }), "In your Gamelog")
+          : e("span", null, e("i", { className: "fa-regular fa-bookmark", style: { marginRight: 5 } }), "Add to Gamelog")
       )
     );
   }
@@ -1896,17 +1985,32 @@
 .comp-game-chip button:hover{color:var(--t1);}
 
 /* ── Post footer linked games ── */
-.gp-post-games{padding:12px 0 6px;border-top:0.5px solid rgba(255,255,255,.06);margin-top:8px;}
-.gp-post-games-label{font-size:11px;font-weight:500;color:var(--t4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;}
-.gp-post-games-list{display:flex;flex-wrap:wrap;gap:10px;}
-.gp-game-card{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 12px 8px 8px;text-decoration:none;transition:background .12s,border-color .12s;}
-.gp-game-card:hover{background:var(--ac-bg);border-color:var(--ac-border);}
-.gp-game-card-cover{width:36px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;}
-.gp-game-card-nocover{width:36px;height:48px;background:rgba(255,255,255,.06);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;color:var(--t4);}
-.gp-game-card-info{min-width:0;}
-.gp-game-card-name{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
-.gp-game-card-year{font-size:11px;color:var(--t4);margin-top:1px;}
-.gp-game-card-dev{font-size:11px;color:var(--t5);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
+/* ── Post sidebar game card ── */
+.gp-psb{margin-bottom:16px;}
+.gp-rw-label{font-size:10px;font-weight:500;color:var(--t4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
+.gp-psb-cover-wrap{position:relative;width:100%;aspect-ratio:2/3;border-radius:10px;overflow:hidden;cursor:pointer;margin-bottom:10px;background:rgba(255,255,255,.04);}
+.gp-psb-cover-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s;}
+.gp-psb-cover-wrap:hover .gp-psb-cover-img{transform:scale(1.03);}
+.gp-psb-cover-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--t5);}
+.gp-psb-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(8,6,16,.97) 0%,rgba(8,6,16,.55) 40%,rgba(8,6,16,.08) 75%,transparent 100%);}
+.gp-psb-cover-bottom{position:absolute;bottom:0;left:0;right:0;padding:10px;}
+.gp-psb-genres{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;}
+.gp-psb-genre-pill{font-size:10px;padding:2px 6px;border-radius:20px;background:rgba(139,92,246,.18);border:0.5px solid rgba(139,92,246,.3);color:#a78bfa;}
+.gp-psb-name{font-size:14px;font-weight:500;color:#fff;line-height:1.25;margin-bottom:2px;}
+.gp-psb-sub{font-size:11px;color:rgba(255,255,255,.38);}
+.gp-psb-awards{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+.gp-psb-award{display:flex;align-items:center;background:rgba(251,191,36,.1);border:0.5px solid rgba(251,191,36,.25);border-radius:20px;padding:3px 9px;font-size:10px;color:#fbbf24;width:fit-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gp-psb-award-year{opacity:.5;margin-left:4px;}
+.gp-psb-stats{display:flex;margin-bottom:10px;border:0.5px solid rgba(255,255,255,.07);border-radius:8px;overflow:hidden;}
+.gp-psb-stat{flex:1;padding:7px 4px;text-align:center;border-right:0.5px solid rgba(255,255,255,.07);}
+.gp-psb-stat:last-child{border-right:none;}
+.gp-psb-stat-n{font-size:13px;font-weight:500;color:var(--t1);margin-bottom:1px;}
+.gp-psb-stat-l{font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:.04em;}
+.gp-psb-btn{width:100%;padding:8px 0;border-radius:8px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;margin-bottom:6px;box-sizing:border-box;transition:opacity .12s;}
+.gp-psb-btn:hover{opacity:.85;}
+.gp-psb-btn-view{background:rgba(139,92,246,.15);border:0.5px solid rgba(139,92,246,.35);color:#a78bfa;}
+.gp-psb-btn-log{background:transparent;border:0.5px solid rgba(255,255,255,.12);color:var(--t3);}
+.gp-psb-btn-added{background:rgba(139,92,246,.08);border:0.5px solid rgba(139,92,246,.3);color:#a78bfa;}
 
 /* ── Profile sidebar link ── */
 .gp-profile-link{display:flex;align-items:center;padding:6px 10px;font-size:13px;color:var(--t2);text-decoration:none;border-radius:8px;transition:background .12s;}
@@ -2050,7 +2154,7 @@
   }, 50);
 
   // post_footer slot — shows linked games below post content
-  NE.registerSlot("post_footer", GamepediaPostGames, 50);
+  NE.registerSlot("post_sidebar", PostSidebarGameCard, 50);
 
   // profile_tab slot — Gamelog tab on user profiles
   // tabLabel is read by Nexus to render the tab label
