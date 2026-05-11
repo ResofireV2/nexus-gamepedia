@@ -2270,8 +2270,8 @@
 .gp-detail-threads{display:flex;flex-direction:column;gap:5px;}
 .gp-detail-thread-row{background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:background .12s;}
 .gp-detail-thread-row:hover{background:var(--s3);}
-.gp-detail-thread-name{font-size:13px;color:var(--t2);}
-.gp-detail-thread-meta{font-size:11px;color:var(--t4);}
+.gp-detail-thread-name{font-size:13px;color:var(--t2);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-detail-thread-meta{font-size:11px;color:var(--t4);display:block;margin-top:2px;}
 .gp-detail-info-block{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;padding:12px 14px;}
 .gp-detail-info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid rgba(255,255,255,.05);}
 .gp-detail-info-row:last-child{border-bottom:none;}
