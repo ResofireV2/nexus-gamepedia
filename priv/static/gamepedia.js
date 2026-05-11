@@ -18,7 +18,7 @@
   const React = window.React;
   const NE    = window.NexusExtensions;
   const NET   = window.NexusExtensionTemplates;
-  const BASE  = "/ext/gamepedia";
+  const BASE  = "/ext/gamepedia/api";
 
   if (!React || !NE) {
     console.warn("[Gamepedia] React or NexusExtensions not available.");
@@ -85,7 +85,7 @@
   function apiFetch(path, opts = {}) {
     return fetch(BASE + path, {
       ...opts,
-      headers: { "Accept": "application/json", ...authHeaders(), ...(opts.headers || {}) },
+      headers: { ...authHeaders(), ...(opts.headers || {}) },
       body:    opts.body ? JSON.stringify(opts.body) : undefined,
     }).then(r => r.json());
   }
