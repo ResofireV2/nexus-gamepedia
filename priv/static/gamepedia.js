@@ -1956,7 +1956,7 @@
 .gp-detail-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;}
 .gp-detail-hero-overlay{position:absolute;inset:0;background:linear-gradient(to top,#0d0d14 0%,rgba(13,13,20,.8) 55%,rgba(13,13,20,.3) 100%);}
 .gp-detail-hero-content{position:relative;z-index:1;display:flex;gap:16px;align-items:flex-start;padding:20px 20px 20px;width:100%;box-sizing:border-box;}
-.gp-detail-cover{width:100px;height:140px;border-radius:8px;border:0.5px solid rgba(255,255,255,.15);object-fit:cover;flex-shrink:0;box-shadow:0 4px 20px rgba(0,0,0,.5);}
+.gp-detail-cover{width:140px;height:196px;border-radius:8px;border:0.5px solid rgba(255,255,255,.15);object-fit:cover;flex-shrink:0;box-shadow:0 4px 20px rgba(0,0,0,.5);}
 .gp-detail-cover-empty{background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--t5);}
 .gp-detail-genres{display:flex;gap:5px;margin-bottom:7px;flex-wrap:wrap;}
 .gp-detail-title{font-size:22px;font-weight:500;color:var(--t1);margin-bottom:3px;}
