@@ -19,10 +19,18 @@ defmodule Gamepedia.ControllerHelpers do
   end
 
   def nexus_user_id(conn) do
-    conn
-    |> Plug.Conn.get_req_header("x-nexus-user-id")
-    |> List.first()
-    |> parse_int()
+    case conn.assigns[:current_user] do
+      %{id: id} -> id
+      _         -> 0
+    end
+  end
+
+  def require_admin(conn) do
+    case conn.assigns[:current_user] do
+      %{role: "admin"} -> :ok
+      nil              -> {:error, :unauthorized}
+      _                -> {:error, :forbidden}
+    end
   end
 
   def release_year(nil), do: nil

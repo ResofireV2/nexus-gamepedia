@@ -34,7 +34,16 @@ defmodule Gamepedia.GameController do
   def show(conn, %{"slug" => slug}) do
     case Games.get_game_by_slug(slug) do
       nil  -> conn |> put_status(:not_found) |> json(%{error: "Game not found"})
-      game -> json(conn, %{data: game_detail(game)})
+      game ->
+        user_id      = Gamepedia.ControllerHelpers.nexus_user_id(conn)
+        rating_summary = Gamepedia.Ratings.summary(game.id)
+        user_rating    = if user_id > 0, do: Gamepedia.Ratings.user_rating(user_id, game.id), else: nil
+        awards         = Gamepedia.Awards.list_for_game(game.id)
+        gamelog_count  = Nexus.Repo.aggregate(
+          Ecto.Query.from(gl in "gamepedia_gamelogs", where: gl.game_id == ^game.id),
+          :count
+        )
+        json(conn, %{data: game_detail(game, rating_summary, user_rating, awards, gamelog_count)})
     end
   end
 
@@ -50,7 +59,7 @@ defmodule Gamepedia.GameController do
     }
   end
 
-  def game_detail(game) do
+  def game_detail(game, rating_summary \\ %{count: 0, avg: nil, distribution: []}, user_rating \\ nil, awards \\ [], gamelog_count \\ 0) do
     %{
       id:                 game.id,
       igdb_id:            game.igdb_id,
@@ -65,6 +74,12 @@ defmodule Gamepedia.GameController do
       first_release_date: game.first_release_date,
       genres:             Enum.map(game.genres, &genre_map/1),
       screenshots:        Enum.map(game.screenshots, &screenshot_map/1),
+      rating_avg:         rating_summary.avg,
+      rating_count:       rating_summary.count,
+      rating_distribution: rating_summary.distribution,
+      user_rating:        user_rating,
+      awards:             awards,
+      gamelog_count:      gamelog_count,
     }
   end
 

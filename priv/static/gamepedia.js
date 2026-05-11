@@ -537,6 +537,7 @@
     const [refreshing,   setRefreshing]  = useState({});
     const [showAddModal, setShowAddModal]= useState(false);
     const [editGenreGame,setEditGenreGame]=useState(null);
+    const [editAwardGame,setEditAwardGame]=useState(null);
     const searchTimer = useRef(null);
 
     // Genres tab state
@@ -750,6 +751,9 @@
                 e("button", { className: "gp-admin-btn", title: "Edit genres", onClick: () => setEditGenreGame(game) },
                   e("i", { className: "fa-solid fa-tags" })
                 ),
+                e("button", { className: "gp-admin-btn", title: "Awards", onClick: () => setEditAwardGame(game) },
+                  e("i", { className: "fa-solid fa-trophy" })
+                ),
                 e("button", {
                   className: "gp-admin-btn",
                   title:     "Refresh from IGDB",
@@ -915,6 +919,12 @@
           setEditGenreGame(null);
         },
         onClose: () => setEditGenreGame(null),
+      }),
+
+      // ── Awards Modal ───────────────────────────────────────────────────────
+      editAwardGame && e(AwardsModal, {
+        game:    editAwardGame,
+        onClose: () => setEditAwardGame(null),
       })
     );
   }
@@ -1006,6 +1016,147 @@
                     }, adding[game.igdb_id] ? "Adding\u2026" : "Add Game")
               )
             )
+          )
+        )
+      )
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // AwardsModal — manage awards for a game (admin only)
+  // ---------------------------------------------------------------------------
+
+  function AwardsModal({ game, onClose }) {
+    const [awards,   setAwards]   = useState([]);
+    const [loading,  setLoading]  = useState(true);
+    const [saving,   setSaving]   = useState(false);
+    const [error,    setError]    = useState(null);
+    const [newYear,  setNewYear]  = useState(new Date().getFullYear().toString());
+    const [newTitle, setNewTitle] = useState("");
+    const [editId,   setEditId]   = useState(null);
+    const [editYear, setEditYear] = useState("");
+    const [editTitle,setEditTitle]= useState("");
+
+    function loadAwards() {
+      setLoading(true);
+      apiFetch(`/admin/games/${game.id}/awards`)
+        .then(r => { setAwards(r.data || []); setLoading(false); })
+        .catch(() => setLoading(false));
+    }
+
+    useEffect(() => { loadAwards(); }, [game.id]);
+
+    function addAward() {
+      if (!newYear.trim() || !newTitle.trim()) return;
+      setSaving(true); setError(null);
+      apiFetch(`/admin/games/${game.id}/awards`, {
+        method: "POST",
+        body: { year: newYear.trim(), title: newTitle.trim() },
+      })
+        .then(r => {
+          if (r.ok) { setNewTitle(""); loadAwards(); }
+          else setError(r.error || "Failed to add award");
+        })
+        .catch(() => setError("Network error"))
+        .finally(() => setSaving(false));
+    }
+
+    function saveEdit(id) {
+      if (!editYear.trim() || !editTitle.trim()) return;
+      setSaving(true); setError(null);
+      apiFetch(`/admin/awards/${id}`, {
+        method: "PATCH",
+        body: { year: editYear.trim(), title: editTitle.trim() },
+      })
+        .then(r => {
+          if (r.ok) { setEditId(null); loadAwards(); }
+          else setError(r.error || "Failed to update award");
+        })
+        .catch(() => setError("Network error"))
+        .finally(() => setSaving(false));
+    }
+
+    function deleteAward(id) {
+      setSaving(true); setError(null);
+      apiFetch(`/admin/awards/${id}`, { method: "DELETE" })
+        .then(r => {
+          if (r.ok) loadAwards();
+          else setError(r.error || "Failed to delete award");
+        })
+        .catch(() => setError("Network error"))
+        .finally(() => setSaving(false));
+    }
+
+    return e("div", { className: "gp-modal-backdrop", onClick: e => { if (e.target === e.currentTarget) onClose(); } },
+      e("div", { className: "gp-modal" },
+        e("div", { className: "gp-modal-header" },
+          e("span", null, `Awards — ${game.name}`),
+          e("button", { className: "gp-modal-close", onClick: onClose }, "\u00D7")
+        ),
+
+        error && e("div", { style: { color: "var(--red)", fontSize: 13, padding: "0 0 10px" } }, error),
+
+        // Existing awards list
+        loading
+          ? e("div", { style: { color: "var(--t4)", fontSize: 13, padding: "12px 0" } }, "Loading\u2026")
+          : awards.length === 0
+            ? e("div", { style: { color: "var(--t4)", fontSize: 13, padding: "12px 0" } }, "No awards yet.")
+            : e("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 } },
+                awards.map(a =>
+                  editId === a.id
+                    ? e("div", { key: a.id, style: { display: "flex", gap: 8, alignItems: "center" } },
+                        e("input", {
+                          style: { width: 60, padding: "6px 8px", background: "var(--s3)", border: "0.5px solid var(--b2)", borderRadius: 8, color: "var(--t1)", fontSize: 13 },
+                          value: editYear, onChange: ev => setEditYear(ev.target.value),
+                          placeholder: "Year",
+                        }),
+                        e("input", {
+                          style: { flex: 1, padding: "6px 10px", background: "var(--s3)", border: "0.5px solid var(--b2)", borderRadius: 8, color: "var(--t1)", fontSize: 13 },
+                          value: editTitle, onChange: ev => setEditTitle(ev.target.value),
+                          placeholder: "Award title",
+                        }),
+                        e("button", { className: "gp-btn-primary", style: { padding: "6px 12px", fontSize: 12 }, disabled: saving, onClick: () => saveEdit(a.id) }, "Save"),
+                        e("button", { className: "gp-admin-btn", style: { fontSize: 12 }, onClick: () => setEditId(null) }, "Cancel")
+                      )
+                    : e("div", { key: a.id, style: { display: "flex", alignItems: "center", gap: 10, background: "rgba(251,191,36,.06)", border: "0.5px solid rgba(251,191,36,.2)", borderRadius: 8, padding: "8px 12px" } },
+                        e("i", { className: "fa-solid fa-trophy", style: { color: "#fbbf24", fontSize: 14, flexShrink: 0 } }),
+                        e("span", { style: { flex: 1, fontSize: 13, color: "var(--t1)" } }, a.title),
+                        e("span", { style: { fontSize: 11, color: "var(--t4)", flexShrink: 0 } }, a.year),
+                        e("button", {
+                          className: "gp-admin-btn",
+                          style: { fontSize: 11, padding: "3px 8px" },
+                          onClick: () => { setEditId(a.id); setEditYear(a.year); setEditTitle(a.title); }
+                        }, e("i", { className: "fa-solid fa-pencil" })),
+                        e("button", {
+                          className: "gp-admin-btn gp-admin-btn-danger",
+                          style: { fontSize: 11, padding: "3px 8px" },
+                          disabled: saving,
+                          onClick: () => deleteAward(a.id),
+                        }, e("i", { className: "fa-solid fa-trash" }))
+                      )
+                )
+              ),
+
+        // Add new award
+        e("div", { style: { borderTop: "0.5px solid var(--b1)", paddingTop: 16 } },
+          e("div", { style: { fontSize: 12, fontWeight: 500, color: "var(--t4)", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 } }, "Add award"),
+          e("div", { style: { display: "flex", gap: 8 } },
+            e("input", {
+              style: { width: 70, padding: "8px 10px", background: "var(--s3)", border: "0.5px solid var(--b2)", borderRadius: 8, color: "var(--t1)", fontSize: 13 },
+              value: newYear, onChange: ev => setNewYear(ev.target.value),
+              placeholder: "Year", maxLength: 4,
+            }),
+            e("input", {
+              style: { flex: 1, padding: "8px 12px", background: "var(--s3)", border: "0.5px solid var(--b2)", borderRadius: 8, color: "var(--t1)", fontSize: 13 },
+              value: newTitle, onChange: ev => setNewTitle(ev.target.value),
+              placeholder: "e.g. Game of the Year", maxLength: 100,
+              onKeyDown: ev => { if (ev.key === "Enter") addAward(); },
+            }),
+            e("button", {
+              className: "gp-btn-primary",
+              disabled: saving || !newYear.trim() || !newTitle.trim(),
+              onClick: addAward,
+            }, saving ? e("i", { className: "fa-solid fa-spinner fa-spin" }) : e("i", { className: "fa-solid fa-plus" }))
           )
         )
       )
@@ -1114,23 +1265,39 @@
     const [inGamelog,   setInGamelog]   = useState(false);
     const [isPlaying,   setIsPlaying]   = useState(false);
     const [logBusy,     setLogBusy]     = useState(false);
-    const [userRating,  setUserRating]  = useState(0);
-    const [hoverRating, setHoverRating] = useState(0);
-    const [ratingBusy,  setRatingBusy]  = useState(false);
+    // Ratings — seed from game data once loaded
+    const [userRating,      setUserRating]      = useState(0);
+    const [hoverRating,     setHoverRating]     = useState(0);
+    const [ratingBusy,      setRatingBusy]      = useState(false);
+    const [ratingAvg,       setRatingAvg]       = useState(null);
+    const [ratingCount,     setRatingCount]     = useState(0);
+    const [ratingDist,      setRatingDist]      = useState([]);
 
     useEffect(() => {
       if (!slug) return;
       setLoading(true);
+      setUserRating(0); setRatingAvg(null); setRatingCount(0);
+      setInGamelog(false); setIsPlaying(false); setPosts([]); setPostDetails({});
+
       apiFetch(`/games/${encodeURIComponent(slug)}`)
         .then(r => {
           if (r.error) { setError(r.error); setLoading(false); return; }
-          setGame(r.data);
+          const g = r.data;
+          setGame(g);
           setLoading(false);
-          if (r.data?.id) {
-            apiFetch(`/games/${r.data.id}/posts`)
+          // Seed ratings from game response
+          if (g.rating_avg   !== undefined) setRatingAvg(g.rating_avg);
+          if (g.rating_count !== undefined) setRatingCount(g.rating_count);
+          if (g.rating_distribution) setRatingDist(g.rating_distribution);
+          if (g.user_rating)          setUserRating(g.user_rating);
+
+          // Forum threads
+          if (g.id) {
+            apiFetch(`/games/${g.id}/posts`)
               .then(pr => {
-                setPosts(pr.data || []);
-                (pr.data || []).forEach(postId => {
+                const ids = pr.data || [];
+                setPosts(ids);
+                ids.forEach(postId => {
                   fetch(`/api/v1/posts/${postId}`, {
                     headers: { "Authorization": `Bearer ${localStorage.getItem("nexus_token") || ""}` }
                   })
@@ -1140,10 +1307,12 @@
                 });
               });
           }
-          if (currentUser?.id && r.data?.id) {
+
+          // Gamelog state
+          if (currentUser?.id && g.id) {
             apiFetch(`/gamelog/${currentUser.id}`)
               .then(gr => {
-                const entry = (gr.data || []).find(g => g.id === r.data.id);
+                const entry = (gr.data || []).find(x => x.id === g.id);
                 if (entry) { setInGamelog(true); setIsPlaying(entry.is_playing); }
               })
               .catch(() => {});
@@ -1176,36 +1345,85 @@
 
     function submitRating(stars) {
       if (!currentUser || ratingBusy) return;
+      if (stars === userRating) {
+        // clicking same star = remove rating
+        setRatingBusy(true);
+        apiFetch(`/games/${game.id}/rate`, { method: "DELETE" })
+          .then(r => {
+            if (r.ok) {
+              setUserRating(0);
+              setRatingAvg(r.summary?.avg ?? null);
+              setRatingCount(r.summary?.count ?? 0);
+              if (r.summary?.distribution) setRatingDist(r.summary.distribution);
+            }
+          })
+          .finally(() => setRatingBusy(false));
+        return;
+      }
       setRatingBusy(true);
       setUserRating(stars);
-      // Rating endpoint placeholder (Stage 6)
-      setTimeout(() => setRatingBusy(false), 500);
+      apiFetch(`/games/${game.id}/rate`, { method: "POST", body: { rating: stars } })
+        .then(r => {
+          if (r.ok) {
+            setRatingAvg(r.summary?.avg ?? null);
+            setRatingCount(r.summary?.count ?? 0);
+            if (r.summary?.distribution) setRatingDist(r.summary.distribution);
+          } else {
+            setUserRating(0);
+          }
+        })
+        .catch(() => setUserRating(0))
+        .finally(() => setRatingBusy(false));
     }
 
     function goToPost(postId) {
       if (window._nexusNavigate) window._nexusNavigate("post", { id: postId });
     }
 
-    // 5-star renderer
-    function StarRow({ value, interactive, onHover, onLeave, onClick, size }) {
-      const sz = size || 18;
-      return e("div", { style: { display: "flex", gap: 3 } },
-        [1, 2, 3, 4, 5].map(star => {
-          const filled = star <= value;
-          return e("i", {
-            key:         star,
-            className:   filled ? "fa-solid fa-star" : "fa-regular fa-star",
-            style:       {
-              fontSize:  sz,
-              color:     filled ? "#a78bfa" : "rgba(255,255,255,.2)",
-              cursor:    interactive ? "pointer" : "default",
-              transition: "color .1s",
+    // 10-point number row renderer (used for rating input)
+    function RatingNumbers({ value, onHover, onLeave, onClick, hover }) {
+      return e("div", { style: { display: "flex", gap: 4 } },
+        [1,2,3,4,5,6,7,8,9,10].map(n => {
+          const active = n <= (hover || value);
+          return e("div", {
+            key: n,
+            style: {
+              width: 26, height: 26,
+              borderRadius: 6,
+              background: active ? "var(--ac-bg)" : "rgba(255,255,255,.06)",
+              border: `0.5px solid ${active ? "var(--ac-border)" : "rgba(255,255,255,.1)"}`,
+              color: active ? "var(--ac-text)" : "var(--t4)",
+              fontSize: 12, fontWeight: active ? 600 : 400,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
+              transition: "all .12s",
             },
-            onMouseEnter: interactive && onHover ? () => onHover(star) : undefined,
-            onMouseLeave: interactive && onLeave ? onLeave : undefined,
-            onClick:      interactive && onClick  ? () => onClick(star) : undefined,
-          });
+            onMouseEnter: onHover ? () => onHover(n) : undefined,
+            onMouseLeave: onLeave || undefined,
+            onClick: onClick ? () => onClick(n) : undefined,
+          }, n);
         })
+      );
+    }
+
+    // Bar chart for rating distribution
+    function RatingDistBar({ distribution }) {
+      if (!distribution?.length) return null;
+      const max = Math.max(...distribution.map(d => d.count), 1);
+      return e("div", { style: { display: "flex", alignItems: "flex-end", gap: 2, height: 32, marginTop: 8 } },
+        distribution.map(d =>
+          e("div", {
+            key: d.score,
+            title: `${d.score}/10: ${d.count} rating${d.count === 1 ? "" : "s"}`,
+            style: {
+              flex: 1,
+              height: `${Math.max(2, Math.round((d.count / max) * 32))}px`,
+              background: d.count > 0 ? "var(--ac)" : "rgba(255,255,255,.08)",
+              borderRadius: 2,
+              transition: "height .2s",
+            }
+          })
+        )
       );
     }
 
@@ -1215,8 +1433,9 @@
     if (error) return e("div", { className: "gp-error" }, error);
     if (!game)  return null;
 
-    const heroUrl = game.screenshots?.[0]?.webp_url || game.screenshots?.[0]?.url?.replace("t_screenshot_big", "t_screenshot_huge") || null;
+    const heroUrl      = game.screenshots?.[0]?.webp_url || game.screenshots?.[0]?.url?.replace("t_screenshot_big", "t_screenshot_huge") || null;
     const displayRating = hoverRating || userRating;
+    const awards       = game.awards || [];
 
     return e("div", { className: "gp-detail" },
 
@@ -1240,27 +1459,54 @@
                 .filter(Boolean).map(String).join(" \u00B7 ")
             ),
 
-            // Rating row in hero
-            e("div", { className: "gp-detail-hero-rating" },
-              // Community aggregate (placeholder)
-              e("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
-                e(StarRow, { value: 0, interactive: false, size: 14 }),
-                e("span", { style: { fontSize: 11, color: "rgba(255,255,255,.35)" } }, "No ratings yet")
-              ),
-
-              // User rating
-              currentUser && e("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 8 } },
-                e(StarRow, {
-                  value:       displayRating,
-                  interactive: true,
-                  size:        20,
-                  onHover:     star => setHoverRating(star),
-                  onLeave:     () => setHoverRating(0),
-                  onClick:     star => submitRating(star),
-                }),
-                userRating > 0 && e("span", { style: { fontSize: 11, color: "rgba(255,255,255,.4)" } },
-                  `Your rating: ${userRating}/5`
+            // Awards ribbon (if any)
+            awards.length > 0 && e("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 } },
+              awards.map(a =>
+                e("span", {
+                  key: a.id,
+                  style: {
+                    display: "flex", alignItems: "center", gap: 5,
+                    background: "rgba(251,191,36,.12)",
+                    border: "0.5px solid rgba(251,191,36,.3)",
+                    borderRadius: 20,
+                    padding: "3px 10px",
+                    fontSize: 11, fontWeight: 500,
+                    color: "#fbbf24",
+                  }
+                },
+                  e("i", { className: "fa-solid fa-trophy", style: { fontSize: 10 } }),
+                  `${a.title}`,
+                  e("span", { style: { opacity: 0.6, marginLeft: 2 } }, a.year)
                 )
+              )
+            ),
+
+            // Community rating summary
+            e("div", { className: "gp-detail-hero-rating" },
+              e("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                ratingAvg
+                  ? e("span", { style: { fontSize: 22, fontWeight: 700, color: "var(--ac-text)" } }, ratingAvg.toFixed(1))
+                  : null,
+                ratingAvg
+                  ? e("span", { style: { fontSize: 11, color: "rgba(255,255,255,.35)" } },
+                      `/ 10 \u00B7 ${ratingCount} rating${ratingCount === 1 ? "" : "s"}`
+                    )
+                  : e("span", { style: { fontSize: 12, color: "rgba(255,255,255,.3)" } }, "No ratings yet")
+              ),
+              ratingDist?.length > 0 && e(RatingDistBar, { distribution: ratingDist }),
+
+              // User rating input
+              currentUser && e("div", { style: { marginTop: 10 } },
+                e("div", { style: { fontSize: 11, color: "rgba(255,255,255,.4)", marginBottom: 5 } },
+                  userRating > 0 ? `Your rating: ${userRating}/10 (click to change or re-click to remove)` : "Rate this game:"
+                ),
+                e(RatingNumbers, {
+                  value:   userRating,
+                  hover:   hoverRating,
+                  onHover: n => setHoverRating(n),
+                  onLeave: () => setHoverRating(0),
+                  onClick: submitRating,
+                })
               )
             ),
 
@@ -1296,12 +1542,12 @@
           e("p", { className: "gp-detail-summary" }, game.summary)
         ),
 
-        // Trailer — uses Nexus's built-in lite YouTube embed (.yt-lite)
+        // Trailer
         game.trailer_youtube_id && e("div", { style: { marginBottom: 24 } },
           e("div", { className: "gp-detail-section-label" }, "Trailer"),
           e("div", {
-            className:    "yt-lite",
-            "data-id":    game.trailer_youtube_id,
+            className: "yt-lite",
+            "data-id": game.trailer_youtube_id,
           },
             e("img", {
               className: "yt-thumb",
@@ -1349,6 +1595,7 @@
               game.developer    && { key: "Developer", val: game.developer },
               game.publisher    && { key: "Publisher",  val: game.publisher },
               game.release_year && { key: "Released",   val: String(game.release_year) },
+              (game.gamelog_count > 0) && { key: "In gamelogs", val: `${game.gamelog_count} member${game.gamelog_count === 1 ? "" : "s"}` },
             ].filter(Boolean).map(row =>
               e("div", { key: row.key, className: "gp-detail-info-row" },
                 e("span", { className: "gp-detail-info-key" }, row.key),
@@ -1364,22 +1611,42 @@
           )
         ),
 
-        // Screenshots — webp thumbnails, lightbox opens full-size jpg slideshow
+        // Awards section
+        awards.length > 0 && e("div", { style: { marginBottom: 24 } },
+          e("div", { className: "gp-detail-section-label" }, "Awards & recognition"),
+          e("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+            awards.map(a =>
+              e("div", {
+                key: a.id,
+                style: {
+                  display: "flex", alignItems: "center", gap: 12,
+                  background: "rgba(251,191,36,.07)",
+                  border: "0.5px solid rgba(251,191,36,.2)",
+                  borderRadius: 10, padding: "10px 14px",
+                }
+              },
+                e("i", { className: "fa-solid fa-trophy", style: { color: "#fbbf24", fontSize: 16, flexShrink: 0 } }),
+                e("div", { style: { flex: 1 } },
+                  e("div", { style: { fontSize: 13, fontWeight: 500, color: "var(--t1)" } }, a.title),
+                  e("div", { style: { fontSize: 11, color: "var(--t4)", marginTop: 2 } }, a.year)
+                )
+              )
+            )
+          )
+        ),
+
+        // Screenshots
         game.screenshots?.length > 0 && e("div", { style: { marginBottom: 24 } },
           e("div", { className: "gp-detail-section-label" }, "Screenshots"),
           e("div", { className: "gp-detail-screenshots" },
             game.screenshots.map((s, i) => {
               const thumbSrc = s.webp_url || s.url;
               const fullSrc  = s.jpg_url  || s.url?.replace("t_screenshot_big", "t_1080p") || s.url;
-              const slides   = game.screenshots.map(sc => ({
-                src:         sc.jpg_url  || sc.url?.replace("t_screenshot_big", "t_1080p") || sc.url,
-                originalSrc: sc.jpg_url  || sc.url?.replace("t_screenshot_big", "t_1080p") || sc.url,
-              }));
               return e("div", {
                 key:       s.id || i,
                 className: "gp-detail-shot",
                 style:     { cursor: "pointer" },
-                onClick:   () => { if (window._lbSetState) window._lbSetState({ src: fullSrc, originalSrc: fullSrc, slides, slideIndex: i }); },
+                onClick:   () => { if (window._lbSetState) window._lbSetState({ src: fullSrc, originalSrc: fullSrc }); },
               },
                 e("img", { src: thumbSrc, alt: `Screenshot ${i + 1}`, style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } })
               );

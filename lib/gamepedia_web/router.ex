@@ -25,6 +25,11 @@ defmodule Gamepedia.Router do
     post   "/gamelog/:game_id/playing", GamelogController, :toggle_playing
     get    "/gamelog/:user_id",         GamelogController, :index
 
+    # Public — ratings
+    get    "/games/:game_id/ratings",  RatingController, :summary
+    post   "/games/:game_id/rate",     RatingController, :rate
+    delete "/games/:game_id/rate",     RatingController, :delete_rating
+
     # Admin — game management
     get    "/admin/games",             AdminGameController, :index
     post   "/admin/games/import",      AdminGameController, :import
@@ -38,5 +43,11 @@ defmodule Gamepedia.Router do
     post   "/admin/genres",     GenreController, :create
     patch  "/admin/genres/:id", GenreController, :update
     delete "/admin/genres/:id", GenreController, :delete
+
+    # Admin — awards management
+    get    "/admin/games/:game_id/awards", AwardController, :index
+    post   "/admin/games/:game_id/awards", AwardController, :create
+    patch  "/admin/awards/:id",            AwardController, :update
+    delete "/admin/awards/:id",            AwardController, :delete
   end
 end
