@@ -1075,7 +1075,7 @@
           "Configure how many games appear in each digest email section. Changes are saved via the Save Changes button above."
         ),
         [
-          { key: "new_games_count",      icon: "fa-sparkles",          label: "New Games",      desc: "Games added to the library during the digest period." },
+          { key: "new_games_count",      icon: "fa-gamepad",           label: "New Games",      desc: "Games added to the library during the digest period." },
           { key: "top_gamelogs_count",   icon: "fa-bookmark",          label: "Most Gamelog’d", desc: "Games with the most new gamelog entries during the period." },
           { key: "most_discussed_count", icon: "fa-comments",          label: "Most Discussed", desc: "Games linked to the most forum threads during the period." },
         ].map(section =>
@@ -2362,10 +2362,17 @@
     tip:   "Link a game",
     color: "var(--ac)",
     onClick(linkedGames, setLinkedGames) {
+      const max = window._gpMaxLinkedGames || 3;
+      if (linkedGames.length >= max) {
+        alert(`You can link up to ${max} game${max === 1 ? "" : "s"} per post. Change this in Gamepedia settings.`);
+        return;
+      }
       openGamePickerModal(
-        game => setLinkedGames(prev =>
-          prev.some(g => g.id === game.id) ? prev : [...prev, game]
-        ),
+        game => setLinkedGames(prev => {
+          if (prev.some(g => g.id === game.id)) return prev;
+          if (prev.length >= max) return prev;
+          return [...prev, game];
+        }),
         linkedGames
       );
     },

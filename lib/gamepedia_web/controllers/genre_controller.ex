@@ -43,5 +43,5 @@ defmodule Gamepedia.GenreController do
     end)
   end
 
-  defp genre_map(g), do: %{id: g.id, name: g.name, slug: g.slug}
+  defp genre_map(g), do: %{id: g.id, name: g.name, slug: g.slug, game_count: Map.get(g, :game_count, 0)}
 end
