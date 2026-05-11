@@ -21,10 +21,12 @@ defmodule Gamepedia.PostGames do
       from(g in Game, where: g.id in ^game_ids, select: g.id)
       |> Repo.all()
 
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
     rows =
       valid_ids
       |> Enum.map(fn gid ->
-        %{post_id: post_id, game_id: gid}
+        %{post_id: post_id, game_id: gid, inserted_at: now}
       end)
 
     Repo.insert_all(
