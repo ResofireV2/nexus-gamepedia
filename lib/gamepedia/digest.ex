@@ -75,9 +75,7 @@ defmodule Gamepedia.Digest do
   defp render_game_cards(title, items, cta, branding) do
     accent   = Map.get(branding, :accent,  "#a78bfa")
     text_1   = Map.get(branding, :text_1,  "#f0eeff")
-    text_3   = Map.get(branding, :text_3,  "rgba(255,255,255,0.55)")
     text_4   = Map.get(branding, :text_4,  "rgba(255,255,255,0.35)")
-    border   = Map.get(branding, :border,  "rgba(255,255,255,0.08)")
     divider  = Map.get(branding, :divider, "rgba(255,255,255,0.08)")
     base_url = Nexus.Mailer.base_url()
 
@@ -93,43 +91,50 @@ defmodule Gamepedia.Digest do
           cover    = item[:cover_image_url]
           item_url = item[:url]
 
-          href_open  = if item_url, do: "<a href=\"" <> base_url <> item_url <> "\" style=\"text-decoration:none;\">", else: "<span>"
-          href_close = if item_url, do: "</a>", else: "</span>"
+          href_open  = if item_url, do: "<a href=\"" <> base_url <> item_url <> "\" style=\"text-decoration:none;display:block;\">", else: "<div>"
+          href_close = if item_url, do: "</a>", else: "</div>"
 
           cover_html = if cover do
-            "<img src=\"" <> cover <> "\" width=\"80\" height=\"107\" " <>
-            "style=\"width:80px;height:107px;object-fit:cover;border-radius:6px;" <>
-            "display:block;border:0.5px solid " <> border <> ";\" />"
+            "<img src=\"" <> cover <> "\" width=\"120\" height=\"160\" " <>
+            "style=\"width:100%;height:160px;object-fit:cover;display:block;border-radius:8px 8px 0 0;\" />"
           else
-            "<div style=\"width:80px;height:107px;border-radius:6px;" <>
-            "background:rgba(255,255,255,0.06);border:0.5px solid " <> border <> ";\">" <>
-            "</div>"
+            "<div style=\"width:100%;height:160px;border-radius:8px 8px 0 0;" <>
+            "background:rgba(255,255,255,0.06);display:flex;align-items:center;" <>
+            "justify-content:center;font-size:28px;color:rgba(255,255,255,0.2);\">" <>
+            "&#9670;</div>"
           end
 
           badge_html = if badge do
             bc = item[:badge_color] || accent
-            "<div style=\"margin-top:4px;display:inline-block;background:" <> bc <>
-            "22;color:" <> bc <> ";font-size:9px;font-weight:700;padding:2px 5px;" <>
-            "border-radius:3px;letter-spacing:.04em;\">" <> badge <> "</div>"
+            "<span style=\"display:inline-block;background:" <> bc <>
+            "22;color:" <> bc <> ";font-size:9px;font-weight:700;padding:2px 6px;" <>
+            "border-radius:20px;letter-spacing:.05em;margin-top:3px;\">" <> badge <> "</span>"
           else "" end
 
           value_html = if value do
-            "<div style=\"font-size:10px;color:" <> text_4 <> ";margin-top:2px;\">" <> value <> "</div>"
+            "<div style=\"font-size:10px;color:" <> accent <> ";margin-top:3px;font-weight:500;\">" <> value <> "</div>"
           else "" end
 
-          "<td style=\"width:33%;padding:0 6px 16px;vertical-align:top;\">" <>
-          href_open <>
-          cover_html <>
-          "<div style=\"margin-top:6px;font-size:11px;font-weight:500;color:" <> text_1 <>
-          ";line-height:1.3;\">" <> label <> "</div>" <>
-          "<div style=\"font-size:10px;color:" <> text_3 <> ";margin-top:2px;\">" <> sublabel <> "</div>" <>
-          badge_html <> value_html <>
-          href_close <>
+          info_html =
+            "<div style=\"padding:8px;background:rgba(255,255,255,0.03);border-radius:0 0 8px 8px;\">" <>
+            "<div style=\"font-size:12px;font-weight:500;color:" <> text_1 <>
+            ";white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\">" <> label <> "</div>" <>
+            "<div style=\"font-size:11px;color:" <> text_4 <> ";margin-top:2px;" <>
+            "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;\">" <> sublabel <> "</div>" <>
+            badge_html <> value_html <>
+            "</div>"
+
+          "<td style=\"width:33%;padding:0 4px 10px;vertical-align:top;\">" <>
+          "<div style=\"background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);" <>
+          "border-radius:10px;overflow:hidden;\">" <>
+          href_open <> cover_html <> href_close <>
+          info_html <>
+          "</div>" <>
           "</td>"
         end)
 
         pad = cols - length(row)
-        padding = if pad > 0, do: String.duplicate("<td style=\"width:33%;padding:0 6px;\"></td>", pad), else: ""
+        padding = if pad > 0, do: String.duplicate("<td style=\"width:33%;padding:0 4px 10px;\"></td>", pad), else: ""
         "<tr>" <> cells <> padding <> "</tr>"
       end)
 
@@ -142,9 +147,9 @@ defmodule Gamepedia.Digest do
 
     divider_html = "<div style=\"height:0.5px;background:" <> divider <> ";margin:24px 0;\"></div>"
 
-    "<p style=\"margin:0 0 12px;font-size:11px;font-weight:500;color:" <> text_4 <>
+    "<p style=\"margin:0 0 14px;font-size:11px;font-weight:500;color:" <> text_4 <>
     ";text-transform:uppercase;letter-spacing:0.8px;\">" <> title <> "</p>" <>
-    "<table cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"margin-bottom:8px;\">" <>
+    "<table cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"margin-bottom:8px;table-layout:fixed;\">" <>
     rows_html <> "</table>" <>
     cta_html <>
     divider_html
