@@ -374,23 +374,20 @@
             }, 400);
           },
         }),
-        genres.length > 1 && e("select", {
-          className: "gp-select",
-          value:     genre,
-          onChange:  ev => { setGenre(ev.target.value); setPage(1); load(1, sort, ev.target.value, search); },
-        },
-          e("option", { value: "" }, "All Genres"),
-          genres.map(g => e("option", { key: g.id, value: g.slug }, g.name))
-        ),
-        e("select", {
-          className: "gp-select",
-          value:     sort,
-          onChange:  ev => { setSort(ev.target.value); setPage(1); load(1, ev.target.value, genre, search); },
-        },
-          e("option", { value: "newest" }, "Date Added"),
-          e("option", { value: "az"     }, "A \u2192 Z"),
-          e("option", { value: "year"   }, "Release Year")
-        )
+        genres.length > 1 && e(GpDropdown, {
+          value:    genre,
+          onChange: v => { setGenre(v); setPage(1); load(1, sort, v, search); },
+          options:  [{ value:"", label:"All Genres" }, ...genres.map(g => ({ value:g.slug, label:g.name }))],
+        }),
+        e(GpDropdown, {
+          value:    sort,
+          onChange: v => { setSort(v); setPage(1); load(1, v, genre, search); },
+          options:  [
+            { value:"newest", label:"Date Added" },
+            { value:"az",     label:"A → Z" },
+            { value:"year",   label:"Release Year" },
+          ],
+        })
       ),
 
       loading && e("div", { className: "gp-loading" },
@@ -696,24 +693,21 @@
                 }, 400);
               },
             }),
-            e("select", {
-              className: "gp-select",
-              value:     genreFilter,
-              onChange:  ev => { setGenreFilter(ev.target.value); loadGames(1); },
-            },
-              e("option", { value: "" }, "All Genres"),
-              filterGenres.map(g => e("option", { key: g.id, value: g.slug }, g.name))
-            ),
-            e("select", {
-              className: "gp-select",
-              value:     sort,
-              onChange:  ev => { setSort(ev.target.value); loadGames(1); },
-            },
-              e("option", { value: "newest" }, "Newest Added"),
-              e("option", { value: "oldest" }, "Oldest Added"),
-              e("option", { value: "az"     }, "A \u2192 Z"),
-              e("option", { value: "za"     }, "Z \u2192 A")
-            )
+            e(GpDropdown, {
+              value:    genreFilter,
+              onChange: v => { setGenreFilter(v); loadGames(1); },
+              options:  [{ value:"", label:"All Genres" }, ...filterGenres.map(g => ({ value:g.slug, label:g.name }))],
+            }),
+            e(GpDropdown, {
+              value:    sort,
+              onChange: v => { setSort(v); loadGames(1); },
+              options:  [
+                { value:"newest", label:"Newest Added" },
+                { value:"oldest", label:"Oldest Added" },
+                { value:"az",     label:"A → Z" },
+                { value:"za",     label:"Z → A" },
+              ],
+            })
           ),
           e("button", {
             className: "gp-btn-primary",
@@ -1372,6 +1366,71 @@
   // Game Browse Page — /ext/gamepedia/browse
   // ---------------------------------------------------------------------------
 
+
+  // ── GpDropdown — styled like Nexus av-dd ───────────────────────────────────────
+  function GpDropdown({ value, onChange, options, style }) {
+    const [open, setOpen] = useState(false);
+    const ref = React.useRef(null);
+
+    React.useEffect(() => {
+      function handleClick(e) {
+        if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      }
+      document.addEventListener("mousedown", handleClick);
+      return () => document.removeEventListener("mousedown", handleClick);
+    }, []);
+
+    const selected = options.find(o => o.value === value) || options[0];
+
+    return e("div", { ref, style: { position:"relative", ...style } },
+      e("button", {
+        onClick: () => setOpen(o => !o),
+        style: {
+          display:"flex",alignItems:"center",gap:8,
+          padding:"6px 10px 6px 12px",
+          background:"rgba(255,255,255,0.05)",
+          border:"0.5px solid var(--b2)",
+          borderRadius:8,cursor:"pointer",
+          fontSize:13,color:"var(--t2)",
+          fontFamily:"inherit",
+          minWidth:130,justifyContent:"space-between",
+        }
+      },
+        e("span", null, selected ? selected.label : ""),
+        e("i", { className:`fa-solid fa-chevron-${open?"up":"down"}`, style:{ fontSize:10,color:"var(--t5)" } })
+      ),
+      open && e("div", {
+        style: {
+          position:"absolute",top:"calc(100% + 6px)",left:0,minWidth:"100%",
+          background:"var(--s2)",border:"0.5px solid var(--b3)",borderRadius:14,
+          padding:6,zIndex:500,
+          boxShadow:"0 8px 40px rgba(0,0,0,.5)",
+        }
+      },
+        options.map(o =>
+          e("div", {
+            key: o.value,
+            onClick: () => { onChange(o.value); setOpen(false); },
+            style: {
+              display:"flex",alignItems:"center",gap:10,
+              padding:"9px 12px",borderRadius:8,cursor:"pointer",
+              fontSize:13,
+              color: o.value === value ? "var(--t1)" : "var(--t3)",
+              background: o.value === value ? "rgba(255,255,255,0.06)" : "none",
+              fontWeight: o.value === value ? 500 : 400,
+            },
+            onMouseEnter: ev => { ev.currentTarget.style.background="rgba(255,255,255,0.06)"; ev.currentTarget.style.color="var(--t1)"; },
+            onMouseLeave: ev => { ev.currentTarget.style.background=o.value===value?"rgba(255,255,255,0.06)":"none"; ev.currentTarget.style.color=o.value===value?"var(--t1)":"var(--t3)"; },
+          },
+            o.value === value && e("i", { className:"fa-solid fa-check", style:{ fontSize:10,width:14,flexShrink:0 } }),
+            o.value !== value && e("span", { style:{ width:14,flexShrink:0 } }),
+            o.label
+          )
+        )
+      )
+    );
+  }
+
   function GameBrowsePage({ navigate, currentUser }) {
     const [games,       setGames]       = useState([]);
     const [loading,     setLoading]     = useState(true);
@@ -1421,23 +1480,20 @@
             }, 400);
           },
         }),
-        genres.length > 0 && e("select", {
-          className: "gp-select",
-          value:     genre,
-          onChange:  ev => { setGenre(ev.target.value); setPage(1); load(1, sort, ev.target.value, search); },
-        },
-          e("option", { value: "" }, "All Genres"),
-          genres.map(g => e("option", { key: g.id, value: g.slug }, g.name))
-        ),
-        e("select", {
-          className: "gp-select",
-          value:     sort,
-          onChange:  ev => { setSort(ev.target.value); setPage(1); load(1, ev.target.value, genre, search); },
-        },
-          e("option", { value: "newest" }, "Newest"),
-          e("option", { value: "az"     }, "A \u2192 Z"),
-          e("option", { value: "year"   }, "Release Year")
-        )
+        genres.length > 0 && e(GpDropdown, {
+          value:    genre,
+          onChange: v => { setGenre(v); setPage(1); load(1, sort, v, search); },
+          options:  [{ value:"", label:"All Genres" }, ...genres.map(g => ({ value:g.slug, label:g.name }))],
+        }),
+        e(GpDropdown, {
+          value:    sort,
+          onChange: v => { setSort(v); setPage(1); load(1, v, genre, search); },
+          options:  [
+            { value:"newest", label:"Newest" },
+            { value:"az",     label:"A → Z" },
+            { value:"year",   label:"Release Year" },
+          ],
+        })
       ),
 
       !loading && e("p", { className: "gp-admin-count" }, `${total} game${total !== 1 ? "s" : ""}`),
