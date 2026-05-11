@@ -1950,7 +1950,28 @@
                 key:       s.id || i,
                 className: "gp-detail-shot",
                 style:     { cursor: "pointer" },
-                onClick:   () => { if (window._lbSetState) window._lbSetState({ src: fullSrc, originalSrc: fullSrc }); },
+                onClick:   () => {
+                  const items = game.screenshots.map((ss, j) => ({
+                    src:   ss.jpg_url || ss.url?.replace("t_screenshot_big", "t_1080p") || ss.url,
+                    thumb: ss.webp_url || ss.url,
+                    caption: `${game.name} — screenshot ${j + 1}`,
+                  }));
+                  if (window.Fancybox) {
+                    window.Fancybox.show(items, {
+                      startIndex: i,
+                      Thumbs: { type: "classic" },
+                      Toolbar: {
+                        display: {
+                          left:   ["infobar"],
+                          middle: [],
+                          right:  ["slideshow","fullscreen","thumbs","close"],
+                        },
+                      },
+                    });
+                  } else if (window._lbSetState) {
+                    window._lbSetState({ src: fullSrc, originalSrc: fullSrc });
+                  }
+                },
               },
                 e("img", { src: thumbSrc, alt: `Screenshot ${i + 1}`, style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } })
               );
