@@ -35,14 +35,11 @@ defmodule Gamepedia.GameController do
     case Games.get_game_by_slug(slug) do
       nil  -> conn |> put_status(:not_found) |> json(%{error: "Game not found"})
       game ->
-        user_id      = Gamepedia.ControllerHelpers.nexus_user_id(conn)
+        user_id        = Gamepedia.ControllerHelpers.nexus_user_id(conn)
         rating_summary = Gamepedia.Ratings.summary(game.id)
         user_rating    = if user_id > 0, do: Gamepedia.Ratings.user_rating(user_id, game.id), else: nil
         awards         = Gamepedia.Awards.list_for_game(game.id)
-        gamelog_count  = Nexus.Repo.aggregate(
-          Ecto.Query.from(gl in "gamepedia_gamelogs", where: gl.game_id == ^game.id),
-          :count
-        )
+        gamelog_count  = Games.gamelog_count(game.id)
         json(conn, %{data: game_detail(game, rating_summary, user_rating, awards, gamelog_count)})
     end
   end

@@ -103,6 +103,10 @@ defmodule Gamepedia.Games do
 
   def get_game(id), do: Repo.get(Game, id)
 
+  def gamelog_count(game_id) do
+    Repo.aggregate(from(gl in "gamepedia_gamelogs", where: gl.game_id == ^game_id), :count)
+  end
+
   def get_game_by_slug(slug) do
     Game
     |> Repo.get_by(slug: slug)
