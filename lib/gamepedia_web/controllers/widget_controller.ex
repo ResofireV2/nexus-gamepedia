@@ -14,7 +14,7 @@ defmodule Gamepedia.WidgetController do
 
     query =
       from g in Game,
-        join: pg in "gamepedia_post_games", on: pg.game_id == g.id,
+        join: pg in "gamepedia_post_game", on: pg.game_id == g.id,
         join: p in Nexus.Forum.Post, on: p.id == pg.post_id,
         where: p.hidden == false,
         group_by: [g.id, g.name, g.slug, g.cover_image_url, g.first_release_date, g.developer],
