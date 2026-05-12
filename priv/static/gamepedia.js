@@ -2439,6 +2439,252 @@
     priority: 60,
   });
 
+
+  // ---------------------------------------------------------------------------
+  // Sidebar widget helpers
+  // ---------------------------------------------------------------------------
+
+  const SORT_PILLS = ["Week", "Month", "All"];
+  const PILL_PARAM = { "Week": "week", "Month": "month", "All": "all" };
+
+  function SortPills({ active, onChange }) {
+    return e("div", { style: { display: "flex", gap: 5, marginBottom: 12 } },
+      SORT_PILLS.map(label =>
+        e("button", {
+          key: label,
+          onClick: () => onChange(label),
+          style: {
+            fontSize: 11, padding: "3px 10px", borderRadius: 20,
+            border: "0.5px solid",
+            borderColor:  active === label ? "var(--ac-border)" : "var(--b2)",
+            background:   active === label ? "var(--ac-bg)"     : "transparent",
+            color:        active === label ? "var(--ac-text)"   : "var(--t4)",
+            cursor: "pointer", fontFamily: "inherit",
+          },
+        }, label)
+      )
+    );
+  }
+
+  function GameRow({ game, countIcon, count }) {
+    return e("div", {
+      onClick: () => {
+        if (window._nexusNavigate)
+          window._nexusNavigate("ext-route", {
+            _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`),
+            slug: game.slug,
+          });
+      },
+      style: {
+        display: "flex", alignItems: "center", gap: 9,
+        padding: "5px 0", borderBottom: "0.5px solid var(--b1)",
+        cursor: "pointer",
+      },
+    },
+      game.cover_image_url
+        ? e("img", {
+            src: game.cover_image_url, alt: game.name,
+            style: { width: 26, height: 35, borderRadius: 4, objectFit: "cover", flexShrink: 0 },
+          })
+        : e("div", {
+            style: {
+              width: 26, height: 35, borderRadius: 4, flexShrink: 0,
+              background: "rgba(255,255,255,0.06)", display: "flex",
+              alignItems: "center", justifyContent: "center",
+              fontSize: 12, color: "var(--t5)",
+            },
+          }, e("i", { className: "fa-solid fa-gamepad" })),
+      e("div", { style: { flex: 1, minWidth: 0 } },
+        e("div", {
+          style: {
+            fontSize: 12, fontWeight: 500, color: "var(--t1)",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          },
+        }, game.name),
+        e("div", { style: { fontSize: 11, color: "var(--t4)", marginTop: 1 } },
+          [game.developer, game.release_year].filter(Boolean).join(" \u00b7 ")
+        )
+      ),
+      e("div", {
+        style: {
+          fontSize: 11, fontWeight: 500, color: "var(--t4)",
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 3,
+        },
+      },
+        e("i", { className: `fa-solid ${countIcon}`, style: { fontSize: 10 } }),
+        count
+      )
+    );
+  }
+
+  function WidgetSpinner() {
+    return e("div", { style: { textAlign: "center", padding: "16px 0", color: "var(--t5)" } },
+      e("i", { className: "fa-solid fa-spinner fa-spin" })
+    );
+  }
+
+  function WidgetEmpty({ text }) {
+    return e("div", { style: { fontSize: 12, color: "var(--t5)", padding: "8px 0" } }, text);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Most Discussed widget
+  // ---------------------------------------------------------------------------
+
+  function MostDiscussedWidget({ navigate }) {
+    const [sort,    setSort]    = useState("Week");
+    const [games,   setGames]   = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      setLoading(true);
+      apiFetch(`/widgets/most-discussed?period=${PILL_PARAM[sort]}`)
+        .then(d => { setGames(d.data || []); setLoading(false); })
+        .catch(() => setLoading(false));
+    }, [sort]);
+
+    return e(React.Fragment, null,
+      e(SortPills, { active: sort, onChange: setSort }),
+      loading
+        ? e(WidgetSpinner, null)
+        : games.length === 0
+          ? e(WidgetEmpty, { text: "No discussions yet this period." })
+          : e("div", null,
+              games.map((game, i) =>
+                e("div", { key: game.id, style: i === games.length - 1 ? { borderBottom: "none" } : {} },
+                  e(GameRow, { game, navigate, countIcon: "fa-message", count: game.thread_count })
+                )
+              )
+            )
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Most Gamelog'd widget
+  // ---------------------------------------------------------------------------
+
+  function MostGamelogdWidget({ navigate }) {
+    const [sort,    setSort]    = useState("Week");
+    const [games,   setGames]   = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      setLoading(true);
+      apiFetch(`/widgets/most-gamelogd?period=${PILL_PARAM[sort]}`)
+        .then(d => { setGames(d.data || []); setLoading(false); })
+        .catch(() => setLoading(false));
+    }, [sort]);
+
+    return e(React.Fragment, null,
+      e(SortPills, { active: sort, onChange: setSort }),
+      loading
+        ? e(WidgetSpinner, null)
+        : games.length === 0
+          ? e(WidgetEmpty, { text: "No gamelogs added yet this period." })
+          : e("div", null,
+              games.map((game, i) =>
+                e("div", { key: game.id, style: i === games.length - 1 ? { borderBottom: "none" } : {} },
+                  e(GameRow, { game, navigate, countIcon: "fa-users", count: game.gamelog_count })
+                )
+              )
+            )
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Genre Explorer widget
+  // ---------------------------------------------------------------------------
+
+  function GenreExplorerWidget({ navigate }) {
+    const [genres,  setGenres]  = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      apiFetch("/admin/genres")
+        .then(d => {
+          const sorted = (d.data || [])
+            .filter(g => g.game_count > 0)
+            .sort((a, b) => b.game_count - a.game_count);
+          setGenres(sorted);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    }, []);
+
+    if (loading) return e(WidgetSpinner, null);
+    if (genres.length === 0) return e(WidgetEmpty, { text: "No genres yet." });
+
+    const visible  = genres.slice(0, 6);
+    const hasMore  = genres.length > 6;
+
+    return e("div", null,
+      e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 } },
+        visible.map(g =>
+          e("div", {
+            key: g.id,
+            onClick: () => {
+              if (window._nexusNavigate)
+                window._nexusNavigate("ext-route", {
+                  _match: NE.matchRoute("/ext/gamepedia/browse"),
+                  genre: g.slug,
+                });
+            },
+            style: {
+              background: "var(--s2)", border: "0.5px solid var(--b1)",
+              borderRadius: 8, padding: "7px 10px", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
+            },
+          },
+            e("span", {
+              style: {
+                fontSize: 12, color: "var(--t1)", fontWeight: 500,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              },
+            }, g.name),
+            e("span", { style: { fontSize: 11, color: "var(--t4)", flexShrink: 0 } }, g.game_count)
+          )
+        )
+      ),
+      hasMore && e("div", {
+        onClick: () => {
+          if (window._nexusNavigate)
+            window._nexusNavigate("ext-route", { _match: NE.matchRoute("/ext/gamepedia/browse") });
+        },
+        style: {
+          fontSize: 11, color: "var(--t4)", textAlign: "center", marginTop: 8,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+        },
+      },
+        "All genres",
+        e("i", { className: "fa-solid fa-arrow-right", style: { fontSize: 10 } })
+      )
+    );
+  }
+
+  // Right sidebar widget — Most Discussed
+  NE.registerRightWidget({
+    id:        "gamepedia-most-discussed",
+    label:     "Most Discussed",
+    component: MostDiscussedWidget,
+    priority:  20,
+  });
+
+  // Right sidebar widget — Most Gamelog'd
+  NE.registerRightWidget({
+    id:        "gamepedia-most-gamelogd",
+    label:     "Most Gamelog\u2019d",
+    component: MostGamelogdWidget,
+    priority:  30,
+  });
+
+  // Right sidebar widget — Genre Explorer
+  NE.registerRightWidget({
+    id:        "gamepedia-genre-explorer",
+    label:     "Browse by Genre",
+    component: GenreExplorerWidget,
+    priority:  40,
+  });
+
   // Right sidebar widget — Now Playing
   NE.registerRightWidget({
     id:        "gamepedia-now-playing",
@@ -2446,6 +2692,19 @@
     component: NowPlayingWidget,
     priority:  60,
   });
+
+  // Custom right sidebar layout for all Gamepedia pages.
+  // Excludes Spaces by Pulse; orders widgets as:
+  //   Live Activity → Most Discussed → Most Gamelog'd → Genre Explorer
+  //   → Stats → Now Playing
+  NE.registerPageSidebar("/ext/gamepedia/", [
+    "live_activity",
+    "gamepedia-most-discussed",
+    "gamepedia-most-gamelogd",
+    "gamepedia-genre-explorer",
+    "stats",
+    "gamepedia-now-playing",
+  ]);
 
   // User card action — View Gamelog
   NE.registerUserAction({
