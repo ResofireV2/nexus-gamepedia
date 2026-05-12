@@ -2667,6 +2667,7 @@
     label:     "Most Discussed",
     component: MostDiscussedWidget,
     priority:  20,
+    pages:     ["ext-route:gamepedia"],
   });
 
   // Right sidebar widget — Most Gamelog'd
@@ -2675,6 +2676,7 @@
     label:     "Most Gamelog\u2019d",
     component: MostGamelogdWidget,
     priority:  30,
+    pages:     ["ext-route:gamepedia"],
   });
 
   // Right sidebar widget — Genre Explorer
@@ -2683,6 +2685,7 @@
     label:     "Browse by Genre",
     component: GenreExplorerWidget,
     priority:  40,
+    pages:     ["ext-route:gamepedia"],
   });
 
   // Right sidebar widget — Now Playing
@@ -2691,6 +2694,7 @@
     label:     "Now Playing",
     component: NowPlayingWidget,
     priority:  60,
+    pages:     ["ext-route:gamepedia"],
   });
 
   // Custom right sidebar layout for all Gamepedia pages.
