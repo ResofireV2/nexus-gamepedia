@@ -3,11 +3,11 @@
  *
  * Registers with NexusExtensions:
  *   registerToolbarButton   — gamepad button in post composer
- *   registerSlot            — post_sidebar (game card in post right sidebar), profile_tab (gamelog)
+ *   registerRightWidget     — Linked Games card (post page), plus Gamepedia browse/game-detail page widgets
+ *   registerSlot            — profile_tab (gamelog)
  *   registerRoute           — /gamepedia/users/:username (gamelog page)
  *   registerAdminPanel      — Gamepedia admin (games, genres, stats)
  *   registerExploreItem     — Browse Games in left sidebar
- *   registerRightWidget     — Now Playing widget
  *   registerUserAction      — View Gamelog on user cards
  *   registerNotificationType — gamepedia_new_game
  */
@@ -203,7 +203,8 @@
   // Receives: { postId, currentUser, navigate }
   // ---------------------------------------------------------------------------
 
-  function PostSidebarGameCard({ postId, currentUser, navigate }) {
+  function PostSidebarGameCard({ navigate, currentUser, pageProps }) {
+    const postId = pageProps?.id;
     const [games,      setGames]      = useState([]);
     const [gameDetails,setGameDetails]= useState({});
     const [gamelogs,   setGamelogs]   = useState({});
@@ -2414,7 +2415,13 @@
   }, 50);
 
   // post_footer slot — shows linked games below post content
-  NE.registerSlot("post_sidebar", PostSidebarGameCard, 200);
+  NE.registerRightWidget({
+    id:        "gamepedia-post-card",
+    label:     "Linked Games",
+    component: PostSidebarGameCard,
+    priority:  20,
+    pages:     ["post"],
+  });
 
   // profile_tab slot — Gamelog tab on user profiles
   // tabLabel is read by Nexus to render the tab label
@@ -2667,7 +2674,7 @@
     label:     "Most Discussed",
     component: MostDiscussedWidget,
     priority:  20,
-    pages:     ["ext-route:gamepedia"],
+    pages:     ["/ext/gamepedia/browse", "/ext/gamepedia/games/:slug"],
   });
 
   // Right sidebar widget — Most Gamelog'd
@@ -2676,7 +2683,7 @@
     label:     "Most Gamelog\u2019d",
     component: MostGamelogdWidget,
     priority:  30,
-    pages:     ["ext-route:gamepedia"],
+    pages:     ["/ext/gamepedia/browse", "/ext/gamepedia/games/:slug"],
   });
 
   // Right sidebar widget — Genre Explorer
@@ -2685,7 +2692,7 @@
     label:     "Browse by Genre",
     component: GenreExplorerWidget,
     priority:  40,
-    pages:     ["ext-route:gamepedia"],
+    pages:     ["/ext/gamepedia/browse", "/ext/gamepedia/games/:slug"],
   });
 
   // Right sidebar widget — Now Playing
@@ -2694,21 +2701,10 @@
     label:     "Now Playing",
     component: NowPlayingWidget,
     priority:  60,
-    pages:     ["ext-route:gamepedia"],
+    pages:     ["/ext/gamepedia/browse", "/ext/gamepedia/games/:slug"],
   });
 
-  // Custom right sidebar layout for all Gamepedia pages.
-  // Excludes Spaces by Pulse; orders widgets as:
-  //   Live Activity → Most Discussed → Most Gamelog'd → Genre Explorer
-  //   → Stats → Now Playing
-  NE.registerPageSidebar("/ext/gamepedia/", [
-    "live_activity",
-    "gamepedia-most-discussed",
-    "gamepedia-most-gamelogd",
-    "gamepedia-genre-explorer",
-    "stats",
-    "gamepedia-now-playing",
-  ]);
+  // Right sidebar layout is now managed by the Nexus Layout admin panel.
 
   // User card action — View Gamelog
   NE.registerUserAction({
