@@ -2253,7 +2253,7 @@
 .gp-gl-stats-playing{display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(139,92,246,.08);border:0.5px solid rgba(139,92,246,.2);border-radius:10px;margin-bottom:12px;}
 .gp-gl-stats-playing-label{font-size:10px;color:var(--ac);font-weight:500;text-transform:uppercase;letter-spacing:.07em;}
 .gp-gl-stats-playing-name{font-size:13px;color:var(--t1);font-weight:500;}
-.gp-gl-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.gp-gl-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}@media(max-width:767.99px){.gp-gl-stat-grid{grid-template-columns:repeat(2,1fr);}}
 .gp-gl-stat-card{background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px;}
 .gp-gl-stat-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
 .gp-gl-stat-n{font-size:16px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
