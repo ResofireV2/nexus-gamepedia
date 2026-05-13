@@ -409,9 +409,8 @@
     // which is resolved via the currentUser if viewing own profile
     function go(ev) {
       ev.preventDefault();
-      if (window._nexusNavigate)
-        window._nexusNavigate("ext-route",
-          { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${currentUser?.id || ""}`), user_id: currentUser?.id });
+      if (window._nexusNavigate && currentUser?.username)
+        window._nexusNavigate("profile", { username: currentUser.username, tab: "gamelog" });
     }
     return e("a", {
       href:      "#",
@@ -652,9 +651,8 @@
           style:   { color: "var(--ac)" },
           onClick: ev => {
             ev.preventDefault();
-            if (window._nexusNavigate)
-              window._nexusNavigate("ext-route",
-                { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${currentUser.id}`), user_id: currentUser.id });
+            if (window._nexusNavigate && currentUser?.username)
+              window._nexusNavigate("profile", { username: currentUser.username, tab: "gamelog" });
           },
         }, "Gamelog"),
         "."
@@ -2434,11 +2432,12 @@
 
   // profile_tab slot — Gamelog tab on user profiles
   // tabLabel is read by Nexus to render the tab label
+  GamelogPage.tabId    = "gamelog";
   GamelogPage.tabLabel = "Gamelog";
   NE.registerSlot("profile_tab", GamelogPage, 50);
 
   // SPA route — gamelog page
-  NE.registerRoute("/ext/gamepedia/gamelog/:user_id", GamelogPage, { title: "Gamelog" });
+  // Gamelog lives in the profile tab — no standalone route needed.
   NE.registerRoute("/ext/gamepedia/games/:slug", GameDetailPage, { title: "Gamepedia" });
   NE.registerRoute("/ext/gamepedia/browse", GameBrowsePage, { title: "Gamepedia" });
 
@@ -2693,8 +2692,7 @@
     onClick({ user, navigate, closeCard }) {
       closeCard();
       if (window._nexusNavigate)
-        window._nexusNavigate("ext-route",
-          { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${user.id}`), user_id: user.id });
+        window._nexusNavigate("profile", { username: user.username, tab: "gamelog" });
     },
   });
 
