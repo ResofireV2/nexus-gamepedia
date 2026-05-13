@@ -2053,7 +2053,7 @@
     );
   }
 
-  function GameBrowsePage({ navigate, currentUser }) {
+  function GameBrowsePage({ navigate, currentUser, genre: initialGenre }) {
     const [games,       setGames]       = useState([]);
     const [loading,     setLoading]     = useState(true);
     const [total,       setTotal]       = useState(0);
@@ -2062,7 +2062,7 @@
     const [search,      setSearch]      = useState("");
     const [searchInput, setSearchInput] = useState("");
     const [genres,      setGenres]      = useState([]);
-    const [genre,       setGenre]       = useState("");
+    const [genre,       setGenre]       = useState(initialGenre || "");
     const [sort,        setSort]        = useState("newest");
     const searchTimer = useRef(null);
 
@@ -2550,7 +2550,8 @@
         .catch(() => setLoading(false));
     }, [sort]);
 
-    return e(React.Fragment, null,
+    return e("div", { className: "rw" },
+      e("div", { className: "rw-label" }, "Most Discussed"),
       e(SortPills, { active: sort, onChange: setSort }),
       loading
         ? e(WidgetSpinner, null)
@@ -2582,7 +2583,8 @@
         .catch(() => setLoading(false));
     }, [sort]);
 
-    return e(React.Fragment, null,
+    return e("div", { className: "rw" },
+      e("div", { className: "rw-label" }, "Most Gamelog’d"),
       e(SortPills, { active: sort, onChange: setSort }),
       loading
         ? e(WidgetSpinner, null)
@@ -2624,7 +2626,8 @@
     const visible  = genres.slice(0, 6);
     const hasMore  = genres.length > 6;
 
-    return e("div", null,
+    return e("div", { className: "rw" },
+      e("div", { className: "rw-label" }, "Browse by Genre"),
       e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 } },
         visible.map(g =>
           e("div", {
