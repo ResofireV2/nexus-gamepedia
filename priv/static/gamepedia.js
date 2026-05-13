@@ -637,42 +637,51 @@
     }, [currentUser?.username]);
 
     if (!currentUser) return null;
-    if (loading) return e("div", { style: { textAlign: "center", padding: 12, color: "var(--t5)" } },
-      e("i", { className: "fa-solid fa-spinner fa-spin" })
+    if (loading) return e("div", { className: "rw" },
+      e("div", { className: "rw-label" }, "Now Playing"),
+      e("div", { style: { textAlign: "center", padding: 12, color: "var(--t5)" } },
+        e("i", { className: "fa-solid fa-spinner fa-spin" })
+      )
     );
-    if (!game) return e("div", { style: { fontSize: 12, color: "var(--t4)", padding: "4px 0" } },
-      "No game currently playing. Add one from your ",
-      e("a", {
-        href:    "#",
-        style:   { color: "var(--ac)" },
-        onClick: ev => {
-          ev.preventDefault();
-          if (window._nexusNavigate)
-            window._nexusNavigate("ext-route",
-              { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${currentUser.id}`), user_id: currentUser.id });
-        },
-      }, "Gamelog"),
-      "."
+    if (!game) return e("div", { className: "rw" },
+      e("div", { className: "rw-label" }, "Now Playing"),
+      e("div", { style: { fontSize: 12, color: "var(--t4)", padding: "4px 0" } },
+        "No game currently playing. Add one from your ",
+        e("a", {
+          href:    "#",
+          style:   { color: "var(--ac)" },
+          onClick: ev => {
+            ev.preventDefault();
+            if (window._nexusNavigate)
+              window._nexusNavigate("ext-route",
+                { _match: NE.matchRoute(`/ext/gamepedia/gamelog/${currentUser.id}`), user_id: currentUser.id });
+          },
+        }, "Gamelog"),
+        "."
+      )
     );
 
-    return e("div", {
-      className: "gp-now-playing",
-      style:     { cursor: "pointer" },
-      onClick:   () => {
-        if (window._nexusNavigate)
-          window._nexusNavigate("ext-route",
-            { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
+    return e("div", { className: "rw" },
+      e("div", { className: "rw-label" }, "Now Playing"),
+      e("div", {
+        className: "gp-now-playing",
+        style:     { cursor: "pointer" },
+        onClick:   () => {
+          if (window._nexusNavigate)
+            window._nexusNavigate("ext-route",
+              { _match: NE.matchRoute(`/ext/gamepedia/games/${game.slug}`), slug: game.slug });
+        },
       },
-    },
-      game.cover_image_url
-        ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-now-playing-cover" })
-        : e("div", { className: "gp-now-playing-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
-      e("div", { className: "gp-now-playing-info" },
-        e("div", { className: "gp-now-playing-label" },
-          e("i", { className: "fa-solid fa-play", style: { fontSize: 9, marginRight: 5, color: "var(--ac)" } }),
-          "Now Playing"
-        ),
-        e("div", { className: "gp-now-playing-name" }, game.name)
+        game.cover_image_url
+          ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-now-playing-cover" })
+          : e("div", { className: "gp-now-playing-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
+        e("div", { className: "gp-now-playing-info" },
+          e("div", { className: "gp-now-playing-label" },
+            e("i", { className: "fa-solid fa-play", style: { fontSize: 9, marginRight: 5, color: "var(--ac)" } }),
+            "Now Playing"
+          ),
+          e("div", { className: "gp-now-playing-name" }, game.name)
+        )
       )
     );
   }
@@ -2623,50 +2632,15 @@
     if (loading) return e(WidgetSpinner, null);
     if (genres.length === 0) return e(WidgetEmpty, { text: "No genres yet." });
 
-    const visible  = genres.slice(0, 6);
-    const hasMore  = genres.length > 6;
-
     return e("div", { className: "rw" },
-      e("div", { className: "rw-label" }, "Browse by Genre"),
-      e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 } },
-        visible.map(g =>
-          e("div", {
-            key: g.id,
-            onClick: () => {
-              if (window._nexusNavigate)
-                window._nexusNavigate("ext-route", {
-                  _match: NE.matchRoute("/ext/gamepedia/browse"),
-                  genre: g.slug,
-                });
-            },
-            style: {
-              background: "var(--s2)", border: "0.5px solid var(--b1)",
-              borderRadius: 8, padding: "7px 10px", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
-            },
-          },
-            e("span", {
-              style: {
-                fontSize: 12, color: "var(--t1)", fontWeight: 500,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              },
-            }, g.name),
-            e("span", { style: { fontSize: 11, color: "var(--t4)", flexShrink: 0 } }, g.game_count)
+      e("div", { className: "rw-label" }, "Genres"),
+      e("div", { className: "stat-grid" },
+        genres.slice(0, 6).map(g =>
+          e("div", { key: g.id, className: "stat-card" },
+            e("div", { className: "stat-n" }, g.game_count),
+            e("div", { className: "stat-l" }, g.name)
           )
         )
-      ),
-      hasMore && e("div", {
-        onClick: () => {
-          if (window._nexusNavigate)
-            window._nexusNavigate("ext-route", { _match: NE.matchRoute("/ext/gamepedia/browse") });
-        },
-        style: {
-          fontSize: 11, color: "var(--t4)", textAlign: "center", marginTop: 8,
-          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-        },
-      },
-        "All genres",
-        e("i", { className: "fa-solid fa-arrow-right", style: { fontSize: 10 } })
       )
     );
   }
