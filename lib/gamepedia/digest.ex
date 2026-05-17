@@ -14,14 +14,18 @@ defmodule Gamepedia.Digest do
       select: %{name: g.name, slug: g.slug, developer: g.developer,
                 cover_image_url: g.cover_image_url, first_release_date: g.first_release_date})
 
-    items = Enum.map(games, fn g ->
-      %{label: g.name, sublabel: subtitle(g), badge: "NEW",
-        badge_color: "#34d399", cover_image_url: g.cover_image_url,
-        url: "/ext/gamepedia/games/#{g.slug}"}
-    end)
+    if games == [] do
+      %{items: []}
+    else
+      items = Enum.map(games, fn g ->
+        %{label: g.name, sublabel: subtitle(g), badge: "NEW",
+          badge_color: "#34d399", cover_image_url: g.cover_image_url,
+          url: "/ext/gamepedia/games/#{g.slug}"}
+      end)
 
-    rendered = render_game_cards("New Games", items, nil, branding)
-    %{"_rendered_html" => rendered}
+      rendered = render_game_cards("New Games", items, nil, branding)
+      %{"_rendered_html" => rendered}
+    end
   end
 
   def top_gamelogs(%{from: from_dt}, settings \\ %{}, branding \\ %{}) do
@@ -36,13 +40,17 @@ defmodule Gamepedia.Digest do
                 cover_image_url: g.cover_image_url, first_release_date: g.first_release_date,
                 count: count(gl.id)})
 
-    items = Enum.map(games, fn g ->
-      %{label: g.name, sublabel: subtitle(g), value: "#{g.count} logs",
-        cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
-    end)
+    if games == [] do
+      %{items: []}
+    else
+      items = Enum.map(games, fn g ->
+        %{label: g.name, sublabel: subtitle(g), value: "#{g.count} logs",
+          cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
+      end)
 
-    rendered = render_game_cards("Most Gamelog\u2019d", items, nil, branding)
-    %{"_rendered_html" => rendered}
+      rendered = render_game_cards("Most Gamelog\u2019d", items, nil, branding)
+      %{"_rendered_html" => rendered}
+    end
   end
 
   def most_discussed(%{from: from_dt, to: to_dt}, settings \\ %{}, branding \\ %{}) do
@@ -59,13 +67,17 @@ defmodule Gamepedia.Digest do
                 cover_image_url: g.cover_image_url, first_release_date: g.first_release_date,
                 count: count(pg.id)})
 
-    items = Enum.map(games, fn g ->
-      %{label: g.name, sublabel: subtitle(g), value: "#{g.count} threads",
-        cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
-    end)
+    if games == [] do
+      %{items: []}
+    else
+      items = Enum.map(games, fn g ->
+        %{label: g.name, sublabel: subtitle(g), value: "#{g.count} threads",
+          cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
+      end)
 
-    rendered = render_game_cards("Most Discussed", items, nil, branding)
-    %{"_rendered_html" => rendered}
+      rendered = render_game_cards("Most Discussed", items, nil, branding)
+      %{"_rendered_html" => rendered}
+    end
   end
 
   # ---------------------------------------------------------------------------
