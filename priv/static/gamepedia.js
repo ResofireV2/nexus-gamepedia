@@ -43,7 +43,7 @@
     }
     window.history.pushState = function(state, title, url) {
       try {
-        JSON.stringify(state);
+        structuredClone(state);
         return orig(state, title, url);
       } catch(e) {
         return orig(sanitize(state), title, url);
