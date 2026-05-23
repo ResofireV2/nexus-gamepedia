@@ -14,6 +14,9 @@ defmodule Gamepedia.Router do
     get  "/games/search", GameController, :igdb_search
     get  "/games/:slug", GameController, :show
 
+    # Public — client-side config (UI-affecting settings only; credentials excluded)
+    get  "/config", ConfigController, :show
+
     # Public — sidebar widgets
     get  "/widgets/most-discussed", WidgetController, :most_discussed
     get  "/widgets/most-gamelogd",  WidgetController, :most_gamelogd
@@ -23,10 +26,11 @@ defmodule Gamepedia.Router do
     get  "/games/:game_id/posts", PostGameController, :posts_for_game
 
     # Public — gamelog
-    post   "/gamelog",                  GamelogController, :add
-    delete "/gamelog/:game_id",         GamelogController, :remove
-    post   "/gamelog/:game_id/playing", GamelogController, :toggle_playing
-    get    "/gamelog/:user_id",         GamelogController, :index
+    post   "/gamelog",                   GamelogController, :add
+    delete "/gamelog/:game_id",          GamelogController, :remove
+    post   "/gamelog/:game_id/playing",  GamelogController, :toggle_playing
+    get    "/gamelog/:user_id",          GamelogController, :index_by_user_id
+    get    "/users/:username/gamelog",   GamelogController, :index_by_username
 
     # Public — ratings
     get    "/games/:game_id/ratings",  RatingController, :summary

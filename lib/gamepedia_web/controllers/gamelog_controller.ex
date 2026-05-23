@@ -3,6 +3,11 @@ defmodule Gamepedia.GamelogController do
   import Gamepedia.ControllerHelpers
   alias Gamepedia.Gamelogs
 
+  # ---------------------------------------------------------------------------
+  # Write actions — all require an authenticated user; act on the viewer's own
+  # gamelog. user_id comes from conn.assigns.current_user (set by LoadUser).
+  # ---------------------------------------------------------------------------
+
   def add(conn, %{"game_id" => game_id}) do
     user_id = nexus_user_id(conn)
     if user_id == 0 do
@@ -43,24 +48,57 @@ defmodule Gamepedia.GamelogController do
     end
   end
 
-  def index(conn, %{"user_id" => user_id_str} = params) do
+  # ---------------------------------------------------------------------------
+  # Read actions — list someone's gamelog.
+  #
+  # Two index paths exist for the two contexts that naturally identify users
+  # differently:
+  #
+  #   index_by_user_id/2     — `GET /gamelog/:user_id`
+  #                            called from contexts that already have a numeric
+  #                            user id (e.g. the linked-games widget on a post
+  #                            page, where currentUser.id is in hand).
+  #
+  #   index_by_username/2    — `GET /users/:username/gamelog`
+  #                            called from the profile tab, which receives a
+  #                            username string per the profile_tab contract.
+  #
+  # Both share `respond_with_listing/4` so the response shape is identical.
+  # ---------------------------------------------------------------------------
+
+  def index_by_user_id(conn, %{"user_id" => user_id_str} = params) do
     user_id = parse_int(user_id_str)
     if user_id == 0 do
       conn |> put_status(:bad_request) |> json(%{error: "Invalid user_id"})
     else
-      {games, total, genres, page, limit} = Gamelogs.list(user_id, params)
-      viewer_id = nexus_user_id(conn)
-      stats     = if page == 1, do: Gamelogs.stats(user_id), else: nil
-
-      json(conn, %{
-        data:     Enum.map(games, &game_json/1),
-        meta:     %{total: total, per_page: limit, current_page: page, last_page: max(1, ceil(total / limit))},
-        filters:  %{genres: genres},
-        user_id:  user_id,
-        is_owner: viewer_id == user_id,
-        stats:    stats,
-      })
+      respond_with_listing(conn, user_id, nil, params)
     end
+  end
+
+  def index_by_username(conn, %{"username" => username} = params) do
+    case Nexus.Accounts.get_user_by_username(username) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "User not found"})
+
+      user ->
+        respond_with_listing(conn, user.id, username, params)
+    end
+  end
+
+  defp respond_with_listing(conn, user_id, username, params) do
+    {games, total, genres, page, limit} = Gamelogs.list(user_id, params)
+    viewer_id = nexus_user_id(conn)
+    stats     = if page == 1, do: Gamelogs.stats(user_id), else: nil
+
+    json(conn, %{
+      data:     Enum.map(games, &game_json/1),
+      meta:     %{total: total, per_page: limit, current_page: page, last_page: max(1, ceil(total / limit))},
+      filters:  %{genres: genres},
+      user_id:  user_id,
+      username: username,
+      is_owner: viewer_id == user_id,
+      stats:    stats,
+    })
   end
 
   defp game_json(g) do
