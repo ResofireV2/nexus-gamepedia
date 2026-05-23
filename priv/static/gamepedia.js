@@ -10,11 +10,10 @@
  *     opens a picker, then calls attach({kind:"game_link", data:{game_id}})
  *     once per selected game when the user confirms. Persistence happens
  *     server-side in Gamepedia.persist_attachment/3.
- *   - Admin panel uses TabbedPanel from window.NexusExtensionTemplates for
- *     the custom Games / Genres / Stats tabs. Settings tabs (Credentials,
- *     Digest, Post Sidebar) are auto-rendered by Nexus from the manifest's
- *     settings_tabs + settings_schema below this panel — do NOT also
- *     include them here or both render.
+ *   - Admin panel uses TabbedPanel + SimpleSettingsPanel from
+ *     window.NexusExtensionTemplates. Six tabs: Games / Genres / Stats are
+ *     custom UI; Credentials / Digest / Post Sidebar are SimpleSettingsPanel
+ *     forms that auto-wire to the top-bar Save button via _nexusAdminSaveFn.
  *   - HTTP credentials are NEVER passed from the client. The server reads
  *     them from extension settings.
  */
@@ -36,7 +35,7 @@
 
   const SLUG = "gamepedia";
   const BASE = "/ext/" + SLUG + "/api";
-  const { TabbedPanel } = NET;
+  const { SimpleSettingsPanel, TabbedPanel } = NET;
 
   // ---------------------------------------------------------------------------
   // HTTP helpers
@@ -65,7 +64,7 @@
 
   // Read a Gamepedia client-side setting injected via window._gp* by the admin
   // panel. These are convenience caches; the values are still authoritative
-  // on the server. Defaults match the manifest's settings_schema defaults.
+  // on the server. Defaults match the admin panel's SimpleSettingsPanel defaults.
   function getMaxLinkedGames()   { return window._gpMaxLinkedGames   || 3; }
   function getSlideshowSeconds() { return window._gpSlideshowSeconds || 5; }
 
@@ -1306,22 +1305,18 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Admin panel — TabbedPanel wrapping SimpleSettingsPanel for the settings
-  // tabs, and custom components for Games / Genres / Stats.
+  // Admin panel — TabbedPanel wrapping custom tabs for Games / Genres / Stats
+  // and SimpleSettingsPanel for Credentials / Digest / Post Sidebar.
   //
-  // The admin panel's top-bar Save button is wired automatically by
-  // SimpleSettingsPanel via the host's _nexusAdminSaveFn global. Custom tabs
-  // unmount the settings panel, which clears the save fn, leaving the button
-  // inert — the correct behavior when there's no dirty state to save.
+  // The admin panel's top-bar Save button is wired automatically. Each
+  // SimpleSettingsPanel registers its save fn via the host's
+  // _nexusAdminSaveFn global when it mounts (i.e. when its tab is active).
+  // Custom tabs (Games / Genres / Stats) have no save fn, so the top-bar
+  // Save button is correctly inert while those tabs are active. Switching
+  // tabs unmounts the previous content and re-registers as appropriate.
   // ---------------------------------------------------------------------------
 
   function GamepediaAdminPanel() {
-    // Only Games / Genres / Stats live here. The host auto-renders the
-    // settings tabs (Credentials / Digest / Post Sidebar) below this panel
-    // from the manifest's settings_tabs + settings_schema. Including them
-    // here too produces a duplicate panel — see AdminExtensions.jsx lines
-    // 944-960 where both the registered admin panel AND the auto-generated
-    // settings form are unconditionally rendered.
     return e(TabbedPanel, {
       tabs: [
         { key: "games",  label: "Games",  icon: "fa-gamepad",
@@ -1330,6 +1325,38 @@
           render: () => e(GenresAdminTab) },
         { key: "stats",  label: "Stats",  icon: "fa-chart-bar",
           render: () => e(StatsAdminTab) },
+        { key: "digest", label: "Digest", icon: "fa-envelope-open-text",
+          render: () => e(SimpleSettingsPanel, {
+            slug: SLUG,
+            fields: [
+              { key: "digest_new_games_count",      label: "New Games count",      type: "number",
+                hint: "Games to show in the New Games digest section." },
+              { key: "digest_top_gamelogs_count",   label: "Most Gamelog'd count", type: "number",
+                hint: "Games to show in the Most Gamelog'd digest section." },
+              { key: "digest_most_discussed_count", label: "Most Discussed count", type: "number",
+                hint: "Games to show in the Most Discussed digest section." },
+            ],
+          }) },
+        { key: "post_sidebar", label: "Post Sidebar", icon: "fa-window-maximize",
+          render: () => e(SimpleSettingsPanel, {
+            slug: SLUG,
+            fields: [
+              { key: "max_linked_games",  label: "Max linked games per post", type: "number",
+                hint: "How many games an author can link to a single post." },
+              { key: "slideshow_seconds", label: "Slideshow timer (seconds)", type: "number",
+                hint: "How long each linked game shows before rotating to the next." },
+            ],
+          }) },
+        { key: "credentials", label: "Credentials", icon: "fa-key",
+          render: () => e(SimpleSettingsPanel, {
+            slug: SLUG,
+            fields: [
+              { key: "igdb_client_id",     label: "IGDB Client ID",     type: "string",
+                hint: "From dev.twitch.tv — the Client ID for your Twitch application." },
+              { key: "igdb_client_secret", label: "IGDB Client Secret", type: "string", secret: true,
+                hint: "From dev.twitch.tv — the Client Secret. Stored encrypted." },
+            ],
+          }) },
       ],
     });
   }
