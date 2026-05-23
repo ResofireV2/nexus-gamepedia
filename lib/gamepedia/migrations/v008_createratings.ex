@@ -1,4 +1,4 @@
-defmodule Gamepedia.Migrations.V20260501000008CreateRatings do
+defmodule Gamepedia.Migrations.V20260523000008CreateRatings do
   use Ecto.Migration
 
   def change do

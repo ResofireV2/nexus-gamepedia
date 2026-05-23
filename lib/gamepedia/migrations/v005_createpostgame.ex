@@ -1,4 +1,4 @@
-defmodule Gamepedia.Migrations.V20260501000005CreatePostGame do
+defmodule Gamepedia.Migrations.V20260523000005CreatePostGame do
   use Ecto.Migration
 
   def change do

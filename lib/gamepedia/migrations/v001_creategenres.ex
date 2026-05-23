@@ -1,4 +1,4 @@
-defmodule Gamepedia.Migrations.V20260501000001CreateGenres do
+defmodule Gamepedia.Migrations.V20260523000001CreateGenres do
   use Ecto.Migration
 
   def change do

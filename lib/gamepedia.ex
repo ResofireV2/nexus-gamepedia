@@ -16,18 +16,37 @@ defmodule Gamepedia do
   # Migrations — run by Nexus on install/update, rolled back on uninstall
   # ---------------------------------------------------------------------------
 
+  # Migration version numbers — IMPORTANT
+  #
+  # The loader extracts an integer version from each module's `V<digits>...`
+  # name and passes it to `Ecto.Migrator.up/3`. That integer is recorded in
+  # the `schema_migrations` table, which is SHARED across Nexus core and
+  # every installed extension. If our version integer already exists in
+  # that table — from a Nexus core migration with the same number — Ecto
+  # silently skips the migration and the table never gets created.
+  #
+  # Nexus core uses `YYYYMMDDHHMMSS`-style integers in the range
+  # `20260501000001` through `20260521000002` (as of Nexus 0.1.0-beta).
+  # We use `20260523...` which postdates Nexus's range. If you add new
+  # migrations, keep them above Nexus core's latest version. Don't reset
+  # the date prefix.
+  #
+  # This isn't covered by EXTENSION_GUIDE.md §8.5 directly — the guide's
+  # examples use either `V001`-style or `V<YYYYMMDD>...` style without
+  # warning that values colliding with Nexus core's own migration numbers
+  # will be silently skipped.
   @impl true
   def migrations do
     [
-      Gamepedia.Migrations.V20260501000001CreateGenres,
-      Gamepedia.Migrations.V20260501000002CreateGames,
-      Gamepedia.Migrations.V20260501000003CreateScreenshots,
-      Gamepedia.Migrations.V20260501000004CreateGameGenre,
-      Gamepedia.Migrations.V20260501000005CreatePostGame,
-      Gamepedia.Migrations.V20260501000006CreateAwards,
-      Gamepedia.Migrations.V20260501000007CreateGamelogs,
-      Gamepedia.Migrations.V20260501000008CreateRatings,
-      Gamepedia.Migrations.V20260510000001AddLocalPathsToScreenshots,
+      Gamepedia.Migrations.V20260523000001CreateGenres,
+      Gamepedia.Migrations.V20260523000002CreateGames,
+      Gamepedia.Migrations.V20260523000003CreateScreenshots,
+      Gamepedia.Migrations.V20260523000004CreateGameGenre,
+      Gamepedia.Migrations.V20260523000005CreatePostGame,
+      Gamepedia.Migrations.V20260523000006CreateAwards,
+      Gamepedia.Migrations.V20260523000007CreateGamelogs,
+      Gamepedia.Migrations.V20260523000008CreateRatings,
+      Gamepedia.Migrations.V20260523000009AddLocalPathsToScreenshots,
     ]
   end
 
