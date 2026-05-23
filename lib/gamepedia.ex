@@ -16,25 +16,38 @@ defmodule Gamepedia do
   # Migrations — run by Nexus on install/update, rolled back on uninstall
   # ---------------------------------------------------------------------------
 
-  # Migration version numbers — IMPORTANT
+  # Migration version numbers + idempotence — IMPORTANT
   #
-  # The loader extracts an integer version from each module's `V<digits>...`
-  # name and passes it to `Ecto.Migrator.up/3`. That integer is recorded in
-  # the `schema_migrations` table, which is SHARED across Nexus core and
-  # every installed extension. If our version integer already exists in
-  # that table — from a Nexus core migration with the same number — Ecto
-  # silently skips the migration and the table never gets created.
+  # Nexus's loader calls `Ecto.Migrator.up/3` for every migration module on
+  # every boot via `Extensions.load_all_enabled/0`. That's normally a no-op
+  # because `Ecto.Migrator` skips versions already recorded in
+  # `schema_migrations`. But two failure modes can desync versions from
+  # actual table state:
   #
-  # Nexus core uses `YYYYMMDDHHMMSS`-style integers in the range
-  # `20260501000001` through `20260521000002` (as of Nexus 0.1.0-beta).
-  # We use `20260523...` which postdates Nexus's range. If you add new
-  # migrations, keep them above Nexus core's latest version. Don't reset
-  # the date prefix.
+  #   1. Version collision: `schema_migrations` is SHARED across Nexus core
+  #      and every installed extension. If our version integer collides with
+  #      a Nexus core migration that already ran, Ecto silently skips us and
+  #      our table never gets created. We avoid this by prefixing versions
+  #      with `20260523...` — above Nexus core's `20260501...20260521` range.
   #
-  # This isn't covered by EXTENSION_GUIDE.md §8.5 directly — the guide's
-  # examples use either `V001`-style or `V<YYYYMMDD>...` style without
-  # warning that values colliding with Nexus core's own migration numbers
-  # will be silently skipped.
+  #   2. Version rename across releases: if an earlier Gamepedia release
+  #      used different version numbers (we did — pre-hotfix versions were
+  #      `20260501000001...20260510000001`), the database has the OLD
+  #      versions recorded but the tables they created persist. When we
+  #      install with NEW version numbers, every boot retries them, and
+  #      every retry fails because the tables already exist. The user sees
+  #      `relation "gamepedia_games" already exists` on a fresh boot with
+  #      no install or update event.
+  #
+  # The defence against both is the same: write idempotent migrations.
+  # `create_if_not_exists table/index` and `add_if_not_exists` column let
+  # the migration succeed (and record its version) regardless of whether
+  # the schema changes are already in place. After one successful boot the
+  # new versions are recorded; future boots skip cleanly.
+  #
+  # If you add new migrations, keep them above Nexus core's latest version
+  # AND use the `_if_not_exists` variants for every DDL operation. Don't
+  # reset the date prefix.
   @impl true
   def migrations do
     [

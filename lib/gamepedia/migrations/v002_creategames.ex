@@ -2,7 +2,7 @@ defmodule Gamepedia.Migrations.V20260523000002CreateGames do
   use Ecto.Migration
 
   def change do
-    create table(:gamepedia_games) do
+    create_if_not_exists table(:gamepedia_games) do
       add :igdb_id,            :integer,  null: false
       add :name,               :string,   null: false
       add :slug,               :string,   null: false
@@ -17,7 +17,7 @@ defmodule Gamepedia.Migrations.V20260523000002CreateGames do
       timestamps(type: :utc_datetime)
     end
 
-    create unique_index(:gamepedia_games, [:igdb_id])
-    create unique_index(:gamepedia_games, [:slug])
+    create_if_not_exists unique_index(:gamepedia_games, [:igdb_id])
+    create_if_not_exists unique_index(:gamepedia_games, [:slug])
   end
 end
