@@ -4,7 +4,7 @@ defmodule Gamepedia.MixProject do
   def project do
     [
       app:     :gamepedia,
-      version: "1.2.3",
+      version: "1.3.0",
       elixir:  "~> 1.17",
       # Library — not a standalone application.
       # Compiled and loaded into the running Nexus VM at install time.

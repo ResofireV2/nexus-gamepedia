@@ -1,6 +1,6 @@
 defmodule Gamepedia.Ratings do
   @moduledoc """
-  Context for game ratings — 1–10 integer scale.
+  Context for game ratings — 1–5 integer scale.
 
   Ratings are per-user, per-game. Users may update their rating at any time;
   the table has a unique index on (user_id, game_id).
@@ -12,7 +12,7 @@ defmodule Gamepedia.Ratings do
   @table "gamepedia_ratings"
 
   # ---------------------------------------------------------------------------
-  # Upsert a rating (1–10)
+  # Upsert a rating (1–5)
   # ---------------------------------------------------------------------------
 
   def rate(user_id, game_id, rating)

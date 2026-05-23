@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name":             "Gamepedia",
   "slug":             "gamepedia",
-  "version":          "1.2.3",
+  "version":          "1.3.0",
   "description":      "A game database powered by IGDB. Browse games, link threads to games, and track your gamelog.",
   "author":           "ResofireV2",
   "homepage":         "https://github.com/ResofireV2/nexus-gamepedia",
@@ -12,7 +12,6 @@
   "logo_url":         "/ext/gamepedia/assets/logo.webp",
   "banner_url":       "/ext/gamepedia/assets/banner.webp",
   "tags":             ["games", "integrations"],
-  "compatible_with":  "^0.1",
 
   "module":     "Gamepedia",
   "js_bundle":  "gamepedia.js",
@@ -82,6 +81,8 @@
   "hooks": [
     { "event": "post_deleted", "priority": 50 }
   ],
+
+  "slots": ["profile_sidebar"],
 
   "side_data": [
     { "entity": "post", "kind": "game_link" }

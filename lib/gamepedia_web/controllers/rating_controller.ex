@@ -3,7 +3,7 @@ defmodule Gamepedia.RatingController do
   import Gamepedia.ControllerHelpers
   alias Gamepedia.Ratings
 
-  # POST /games/:game_id/rate  body: {rating: 1-10}
+  # POST /games/:game_id/rate  body: {rating: 1-5}
   # DELETE /games/:game_id/rate  — remove user's rating
   def rate(conn, %{"game_id" => game_id_str, "rating" => rating_val}) do
     user_id = nexus_user_id(conn)
@@ -20,7 +20,7 @@ defmodule Gamepedia.RatingController do
     end
   end
 
-  def rate(conn, _), do: conn |> put_status(:bad_request) |> json(%{error: "Required: rating (1–10)"})
+  def rate(conn, _), do: conn |> put_status(:bad_request) |> json(%{error: "Required: rating (1–5)"})
 
   def delete_rating(conn, %{"game_id" => game_id_str}) do
     user_id = nexus_user_id(conn)

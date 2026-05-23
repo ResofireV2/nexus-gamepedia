@@ -10,8 +10,11 @@
  *     opens a picker, then calls attach({kind:"game_link", data:{game_id}})
  *     once per selected game when the user confirms. Persistence happens
  *     server-side in Gamepedia.persist_attachment/3.
- *   - Admin panel uses TabbedPanel + SimpleSettingsPanel from
- *     window.NexusExtensionTemplates for credential and digest forms.
+ *   - Admin panel uses TabbedPanel from window.NexusExtensionTemplates for
+ *     the custom Games / Genres / Stats tabs. Settings tabs (Credentials,
+ *     Digest, Post Sidebar) are auto-rendered by Nexus from the manifest's
+ *     settings_tabs + settings_schema below this panel — do NOT also
+ *     include them here or both render.
  *   - HTTP credentials are NEVER passed from the client. The server reads
  *     them from extension settings.
  */
@@ -33,7 +36,7 @@
 
   const SLUG = "gamepedia";
   const BASE = "/ext/" + SLUG + "/api";
-  const { SimpleSettingsPanel, TabbedPanel } = NET;
+  const { TabbedPanel } = NET;
 
   // ---------------------------------------------------------------------------
   // HTTP helpers
@@ -341,44 +344,92 @@
       }
     }
 
-    return e("div", { className: "gp-postcard" },
-      e("div", { className: "gp-postcard-cover-wrap" },
+    function goToGame() {
+      if (game) nav("/ext/" + SLUG + "/games/" + game.slug);
+    }
+
+    return e("div", { className: "gp-psb" },
+      e("div", { className: "gp-rw-label" },
+        games.length > 1 ? "linked games (" + (activeIdx + 1) + "/" + games.length + ")" : "linked game"
+      ),
+
+      // Cover with gradient overlay and bottom-mounted genres/name/sub
+      e("div", { className: "gp-psb-cover-wrap", onClick: goToGame },
         game.cover_image_url
-          ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-postcard-cover",
-              style: { cursor: "pointer" },
-              onClick: () => nav("/ext/" + SLUG + "/games/" + game.slug) })
-          : e("div", { className: "gp-postcard-cover gp-postcard-cover-empty" },
-              e("i", { className: "fa-solid fa-gamepad" })),
-        games.length > 1 && e("div", { className: "gp-postcard-progress" },
-          e("div", { className: "gp-postcard-progress-bar", style: { width: (progress * 100) + "%" } })
+          ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-psb-cover-img" })
+          : e("div", { className: "gp-psb-cover-empty" }, e("i", { className: "fa-solid fa-gamepad" })),
+        e("div", { className: "gp-psb-overlay" }),
+        e("div", { className: "gp-psb-cover-bottom" },
+          game.genres && game.genres.length > 0 && e("div", { className: "gp-psb-genres" },
+            game.genres.slice(0, 2).map(g => e("span", { key: g.id, className: "gp-psb-genre-pill" }, g.name))
+          ),
+          e("div", { className: "gp-psb-name" }, game.name),
+          e("div", { className: "gp-psb-sub" },
+            [game.developer, game.publisher, game.release_year].filter(Boolean).map(String).slice(0, 2).join(" \u00b7 ")
+          )
         )
       ),
-      e("div", { className: "gp-postcard-info" },
-        e("div", { className: "gp-postcard-name", onClick: () => nav("/ext/" + SLUG + "/games/" + game.slug) }, game.name),
-        game.developer && e("div", { className: "gp-postcard-dev" }, game.developer),
-        game.genres && game.genres.length > 0 && e("div", { className: "gp-postcard-genres" },
-          game.genres.slice(0, 3).map(g => e("span", { key: g.id, className: "gp-genre-tag" }, g.name))
+
+      // Slideshow progress bar + dots (only when >1 linked game)
+      games.length > 1 && e("div", { className: "gp-psb-slideshow" },
+        e("div", { className: "gp-psb-progress-bar" },
+          e("div", { className: "gp-psb-progress-fill", style: { width: (progress * 100) + "%" } })
         ),
-        awards.length > 0 && e("div", { className: "gp-postcard-awards" },
-          e("i", { className: "fa-solid fa-trophy", style: { marginRight: 5, color: "#fbbf24" } }),
-          awards.length + " award" + (awards.length === 1 ? "" : "s")
-        ),
-        currentUser && e("button", {
-            className: "gp-btn" + (inGamelog ? " gp-btn-active" : ""),
-            disabled:  !!logBusy[game.id],
-            onClick:   toggleGamelog,
-            style:     { width: "100%", marginTop: 10 },
-          },
-          e("i", { className: "fa-solid " + (inGamelog ? "fa-check" : "fa-plus"), style: { marginRight: 6 } }),
-          inGamelog ? "In your gamelog" : "Add to gamelog"
-        ),
-        games.length > 1 && e("div", { className: "gp-postcard-dots" },
-          games.map((_, i) => e("button", {
+        e("div", { className: "gp-psb-dots" },
+          games.map((_, i) => e("div", {
             key:       i,
-            className: "gp-postcard-dot" + (i === activeIdx ? " active" : ""),
+            className: "gp-psb-dot" + (i === activeIdx ? " active" : ""),
             onClick:   () => goTo(i),
           }))
         )
+      ),
+
+      // Awards row — chip-style with year subscript
+      awards.length > 0 && e("div", { className: "gp-psb-awards" },
+        awards.slice(0, 2).map(a => e("div", { key: a.id, className: "gp-psb-award" },
+          e("i", { className: "fa-solid fa-trophy", style: { fontSize: 9, marginRight: 4 } }),
+          a.title,
+          a.year && e("span", { className: "gp-psb-award-year" }, a.year)
+        ))
+      ),
+
+      // 3-stat horizontal row: rating / gamelogs / threads
+      e("div", { className: "gp-psb-stats" },
+        e("div", { className: "gp-psb-stat" },
+          e("div", { className: "gp-psb-stat-n" },
+            game.rating_avg
+              ? e("span", null,
+                  e("i", { className: "fa-solid fa-star", style: { fontSize: 10, marginRight: 2, color: "#a78bfa" } }),
+                  game.rating_avg.toFixed(1))
+              : e("span", { style: { fontSize: 10 } }, "—")
+          ),
+          e("div", { className: "gp-psb-stat-l" }, "rating")
+        ),
+        e("div", { className: "gp-psb-stat" },
+          e("div", { className: "gp-psb-stat-n" }, game.gamelog_count != null ? game.gamelog_count : "—"),
+          e("div", { className: "gp-psb-stat-l" }, "gamelogs")
+        ),
+        e("div", { className: "gp-psb-stat" },
+          e("div", { className: "gp-psb-stat-n" }, game.thread_count != null ? game.thread_count : "—"),
+          e("div", { className: "gp-psb-stat-l" }, "threads")
+        )
+      ),
+
+      // "View in Gamepedia" button — the primary CTA to open the game detail page
+      e("div", { className: "gp-psb-btn gp-psb-btn-view", onClick: goToGame },
+        "View in Gamepedia ",
+        e("i", { className: "fa-solid fa-arrow-right", style: { fontSize: 10 } })
+      ),
+
+      // "Add to / In Gamelog" toggle (only when logged in)
+      currentUser && e("div", {
+          className: "gp-psb-btn " + (inGamelog ? "gp-psb-btn-added" : "gp-psb-btn-log"),
+          onClick:   logBusy[game.id] ? undefined : toggleGamelog,
+          style:     logBusy[game.id] ? { opacity: .5 } : {},
+        },
+        inGamelog
+          ? e("span", null, e("i", { className: "fa-solid fa-check", style: { marginRight: 5 } }), "In your Gamelog")
+          : e("span", null, e("i", { className: "fa-regular fa-bookmark", style: { marginRight: 5 } }), "Add to Gamelog")
       )
     );
   }
@@ -531,46 +582,78 @@
   }
 
   // ---------------------------------------------------------------------------
+  // GamepediaGamelogLink — profile_sidebar slot component.
+  //
+  // Renders a small "Gamelog" link in the profile page's sidebar. Clicking
+  // it jumps to that profile's Gamelog tab. Per the profile_sidebar slot
+  // contract this component receives ONLY {username, current_user} — the
+  // username is the profile being viewed (not the viewer's). The original
+  // bundle's version had a bug where it navigated to currentUser.username
+  // instead; restored here with the corrected target.
+  // ---------------------------------------------------------------------------
+
+  function GamepediaGamelogLink({ username, current_user }) {
+    function go(ev) {
+      ev.preventDefault();
+      if (username) nav("/profile/" + username + "/gamelog");
+    }
+    return e("a", {
+      href:      "#",
+      onClick:   go,
+      className: "gp-profile-link",
+    },
+      e("i", { className: "fa-solid fa-bookmark", style: { marginRight: 6 } }),
+      "Gamelog"
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // NowPlayingWidget — right_widget bound to id "gamepedia-now-playing".
   // Shows games the current user has marked as currently playing.
   // ---------------------------------------------------------------------------
 
   function NowPlayingWidget({ currentUser }) {
-    const [games,   setGames]   = useState([]);
+    const [game,    setGame]    = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
       if (!currentUser?.id) { setLoading(false); return; }
-      apiFetch("/gamelog/" + currentUser.id)
+      apiFetch("/gamelog/" + currentUser.id + "?sort=newest&page=1")
         .then(r => {
-          const playing = (r.data || []).filter(g => g.is_playing);
-          setGames(playing);
+          const playing = (r.data || []).find(g => g.is_playing) || null;
+          setGame(playing);
           setLoading(false);
         })
         .catch(() => setLoading(false));
-    }, [currentUser?.id]);
+    }, [currentUser?.username]);
 
     if (!currentUser) return null;
     if (loading) return e("div", { className: "rw" },
-      e("div", { className: "rw-label" }, "now playing"),
-      e(WidgetSpinner)
+      e("div", { className: "rw-label" }, "Now Playing"),
+      e("div", { style: { textAlign: "center", padding: 12, color: "var(--t5)" } },
+        e("i", { className: "fa-solid fa-spinner fa-spin" })
+      )
     );
-    if (games.length === 0) {
-      return e("div", { className: "rw" },
-        e("div", { className: "rw-label" }, "now playing"),
-        e("div", { style: { fontSize: 12, color: "var(--t5)", padding: "8px 0", cursor: "pointer" },
-          onClick: () => currentUser && nav("/profile/" + currentUser.username + "/gamelog") },
-          "Mark games as playing in your gamelog\u2026")
-      );
-    }
+    if (!game) return null;
+
     return e("div", { className: "rw" },
-      e("div", { className: "rw-label" }, "now playing"),
-      games.slice(0, 5).map(g => e(GameRow, {
-        key:       g.id,
-        game:      g,
-        countIcon: "fa-circle-play",
-        count:     "",
-      }))
+      e("div", { className: "rw-label" }, "Now Playing"),
+      e("div", {
+        className: "gp-now-playing",
+        style:     { cursor: "pointer" },
+        onClick:   () => nav("/ext/" + SLUG + "/games/" + game.slug),
+      },
+        game.cover_image_url
+          ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-now-playing-cover" })
+          : e("div", { className: "gp-now-playing-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
+        e("div", { className: "gp-now-playing-info" },
+          e("div", { className: "gp-now-playing-label" },
+            e("i", { className: "fa-solid fa-play", style: { fontSize: 9, marginRight: 5, color: "var(--ac)" } }),
+            "Now Playing"
+          ),
+          e("div", { className: "gp-now-playing-name" }, game.name)
+        )
+      )
     );
   }
 
@@ -592,11 +675,12 @@
     const [ratingBusy,  setRatingBusy]  = useState(false);
     const [ratingAvg,   setRatingAvg]   = useState(null);
     const [ratingCount, setRatingCount] = useState(0);
+    const [ratingDist,  setRatingDist]  = useState([]);
 
     useEffect(() => {
       if (!slug) return;
       setLoading(true);
-      setUserRating(0); setRatingAvg(null); setRatingCount(0);
+      setUserRating(0); setRatingAvg(null); setRatingCount(0); setRatingDist([]);
       setInGamelog(false); setIsPlaying(false); setPosts([]); setPostDetails({});
 
       apiFetch("/games/" + encodeURIComponent(slug))
@@ -607,6 +691,7 @@
           setLoading(false);
           if (g.rating_avg   !== undefined) setRatingAvg(g.rating_avg);
           if (g.rating_count !== undefined) setRatingCount(g.rating_count);
+          if (g.rating_distribution)        setRatingDist(g.rating_distribution);
           if (g.user_rating)                setUserRating(g.user_rating);
 
           if (g.id) {
@@ -662,7 +747,11 @@
           .then(r => {
             if (r.ok) {
               setUserRating(0);
-              if (r.summary) { setRatingAvg(r.summary.avg); setRatingCount(r.summary.count); }
+              if (r.summary) {
+                setRatingAvg(r.summary.avg);
+                setRatingCount(r.summary.count);
+                if (r.summary.distribution) setRatingDist(r.summary.distribution);
+              }
             }
           })
           .finally(() => setRatingBusy(false));
@@ -671,7 +760,11 @@
           .then(r => {
             if (r.ok) {
               setUserRating(stars);
-              if (r.summary) { setRatingAvg(r.summary.avg); setRatingCount(r.summary.count); }
+              if (r.summary) {
+                setRatingAvg(r.summary.avg);
+                setRatingCount(r.summary.count);
+                if (r.summary.distribution) setRatingDist(r.summary.distribution);
+              }
             }
           })
           .finally(() => setRatingBusy(false));
@@ -727,38 +820,129 @@
                 isPlaying ? "Currently playing" : "Mark playing"
               )
             ),
-            currentUser && e("div", { className: "gp-detail-rating" },
-              e(StarRow, {
-                value:   hoverRating || userRating,
-                onHover: setHoverRating,
-                onLeave: () => setHoverRating(0),
-                onClick: submitRating,
-                hover:   hoverRating,
-                size:    22,
-              }),
-              ratingAvg !== null && e("span", { style: { fontSize: 12, color: "var(--t4)", marginLeft: 10 } },
-                ratingAvg.toFixed(1) + " · " + ratingCount + " rating" + (ratingCount === 1 ? "" : "s")
-              )
+            // Community rating summary
+            e("div", { className: "gp-detail-hero-rating" },
+              e("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                ratingAvg
+                  ? e("i", { className: "fa-solid fa-star", style: { fontSize: 16, color: "#a78bfa", marginRight: 2 } })
+                  : null,
+                ratingAvg
+                  ? e("span", { style: { fontSize: 22, fontWeight: 700, color: "var(--ac-text)" } }, ratingAvg.toFixed(1))
+                  : null,
+                ratingAvg
+                  ? e("span", { style: { fontSize: 11, color: "rgba(255,255,255,.35)" } },
+                      "/ 5 \u00B7 " + ratingCount + " rating" + (ratingCount === 1 ? "" : "s")
+                    )
+                  : e("span", { style: { fontSize: 12, color: "rgba(255,255,255,.3)" } }, "No ratings yet")
+              ),
+              currentUser && e("div", { style: { marginTop: 10 } },
+                e("div", { style: { fontSize: 11, color: "rgba(255,255,255,.4)", marginBottom: 6 } },
+                  userRating > 0 ? "Your rating: " + userRating + "/5 \u00b7 click again to remove" : "Rate this game:"
+                ),
+                e(StarRow, {
+                  value:   userRating,
+                  hover:   hoverRating,
+                  size:    24,
+                  onHover: setHoverRating,
+                  onLeave: () => setHoverRating(0),
+                  onClick: submitRating,
+                })
+              ),
+              ratingDist && ratingDist.length > 0 && ratingCount > 0 && e(RatingDistBar, { distribution: ratingDist })
             )
           )
         )
       ),
 
-      // Trailer
+      // Trailer — Nexus core ships the .yt-lite facade. A global click
+      // listener in nexus.jsx (line 101) intercepts clicks on .yt-lite,
+      // reads data-id, and appends the YouTube iframe. We just emit the
+      // markup; host handles activation. Saves loading the YouTube iframe
+      // (and ~1MB of YT JS) until the user actually clicks.
       game.trailer_youtube_id && e("div", { className: "gp-detail-section" },
         e("div", { className: "gp-detail-section-title" }, "Trailer"),
-        e("div", { className: "gp-detail-trailer" },
-          e("iframe", {
-            src: "https://www.youtube-nocookie.com/embed/" + game.trailer_youtube_id,
-            allowFullScreen: true,
-            frameBorder:     "0",
+        e("div", {
+          className: "yt-lite",
+          "data-id": game.trailer_youtube_id,
+        },
+          e("img", {
+            className: "yt-thumb",
+            src:       "https://i.ytimg.com/vi/" + game.trailer_youtube_id + "/maxresdefault.jpg",
+            alt:       game.name + " trailer",
+            loading:   "lazy",
+            onError:   ev => { ev.target.src = "https://i.ytimg.com/vi/" + game.trailer_youtube_id + "/hqdefault.jpg"; },
+          }),
+          e("div", { className: "yt-play" },
+            e("svg", { height: "48", viewBox: "0 0 68 48", width: "68", xmlns: "http://www.w3.org/2000/svg" },
+              e("path", { d: "M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z", fill: "#f00" }),
+              e("path", { d: "M45 24 27 14v20", fill: "#fff" })
+            )
+          )
+        )
+      ),
+
+      // Forum discussions — list of post threads linked to this game.
+      // Each row shows avatar, post title, author username, and reply count.
+      posts.length > 0 && e("div", { className: "gp-detail-section" },
+        e("div", { className: "gp-detail-section-title" }, "Forum discussions"),
+        e("div", { className: "gp-detail-threads" },
+          posts.map(postId => {
+            const pd = postDetails[postId];
+            const author   = pd?.user;
+            const initials = author?.username ? author.username.slice(0, 2).toUpperCase() : "?";
+            return e("div", {
+              key:       postId,
+              className: "gp-detail-thread-row",
+              onClick:   () => nav("/post/" + postId),
+            },
+              author?.avatar_url
+                ? e("img", { src: author.avatar_url, className: "gp-detail-thread-avatar", alt: author.username })
+                : e("div", { className: "gp-detail-thread-avatar gp-detail-thread-avatar-init" }, initials),
+              e("div", { className: "gp-detail-thread-body" },
+                e("span", { className: "gp-detail-thread-name" },
+                  pd ? (pd.title || "(untitled)") : "Post #" + postId
+                ),
+                pd && e("span", { className: "gp-detail-thread-meta" },
+                  author ? author.username + " \u00b7 " : "",
+                  (pd.reply_count || 0) + " repl" + (pd.reply_count === 1 ? "y" : "ies")
+                )
+              )
+            );
           })
+        )
+      ),
+
+      // Game info — single rounded card with key/value rows separated by
+      // hairline dividers. Mirrors the original .gp-detail-info-block layout.
+      e("div", { className: "gp-detail-section" },
+        e("div", { className: "gp-detail-section-title" }, "Game info"),
+        e("div", { className: "gp-detail-info-block" },
+          [
+            game.developer     && { key: "Developer",   val: game.developer },
+            game.publisher     && { key: "Publisher",   val: game.publisher },
+            game.release_year  && { key: "Released",    val: String(game.release_year) },
+            (game.gamelog_count > 0) && { key: "In gamelogs",
+              val: game.gamelog_count + " member" + (game.gamelog_count === 1 ? "" : "s") },
+            (game.thread_count > 0) && { key: "Threads",
+              val: game.thread_count + " thread" + (game.thread_count === 1 ? "" : "s") },
+          ].filter(Boolean).map(row =>
+            e("div", { key: row.key, className: "gp-detail-info-row" },
+              e("span", { className: "gp-detail-info-key" }, row.key),
+              e("span", { className: "gp-detail-info-val" }, row.val)
+            )
+          ),
+          game.genres && game.genres.length > 0 && e("div", { className: "gp-detail-info-row" },
+            e("span", { className: "gp-detail-info-key" }, "Genres"),
+            e("div", { style: { display: "flex", gap: 4, flexWrap: "wrap" } },
+              game.genres.map(g => e("span", { key: g.id, className: "gp-genre-tag" }, g.name))
+            )
+          )
         )
       ),
 
       // Awards
       awards.length > 0 && e("div", { className: "gp-detail-section" },
-        e("div", { className: "gp-detail-section-title" }, "Awards"),
+        e("div", { className: "gp-detail-section-title" }, "Awards & recognition"),
         e("div", { className: "gp-detail-awards" },
           awards.map(a => e("div", { key: a.id, className: "gp-award" },
             e("i", { className: "fa-solid fa-trophy", style: { color: "#fbbf24", marginRight: 8 } }),
@@ -768,68 +952,77 @@
         )
       ),
 
-      // Threads
-      posts.length > 0 && e("div", { className: "gp-detail-section" },
-        e("div", { className: "gp-detail-section-title" }, "Forum threads"),
-        e("div", { className: "gp-detail-posts" },
-          posts.map(postId => {
-            const pd = postDetails[postId];
-            if (!pd) return e("div", { key: postId, className: "gp-detail-post-loading" }, "\u2026");
-            return e("div", { key: postId, className: "gp-detail-post",
-              onClick: () => nav("/post/" + postId) },
-              e("div", { className: "gp-detail-post-title" }, pd.title || "(untitled)"),
-              e("div", { className: "gp-detail-post-meta" },
-                pd.user?.username && "@" + pd.user.username,
-                pd.reply_count != null && " \u00b7 " + pd.reply_count + " repl" + (pd.reply_count === 1 ? "y" : "ies")
-              )
-            );
-          })
-        )
-      ),
-
-      // Info table
-      e("div", { className: "gp-detail-section" },
-        e("div", { className: "gp-detail-section-title" }, "Info"),
-        e("div", { className: "gp-detail-info-grid" },
-          game.developer  && e(InfoRow, { label: "Developer",    value: game.developer }),
-          game.publisher  && e(InfoRow, { label: "Publisher",    value: game.publisher }),
-          game.release_year && e(InfoRow, { label: "Released",   value: String(game.release_year) }),
-          game.gamelog_count != null && e(InfoRow, { label: "Gamelogs", value: String(game.gamelog_count) }),
-          game.thread_count  != null && e(InfoRow, { label: "Threads",  value: String(game.thread_count) })
-        )
-      ),
-
-      // Screenshots
+      // Screenshots — clicking opens the Nexus core Fancybox lightbox. The
+      // host's auto-click handler at nexus.jsx:369 only matches `.md-body img`,
+      // so we wire the click ourselves via window._openFancybox (exported at
+      // line 248). Falls back gracefully if the host hasn't loaded yet.
       game.screenshots && game.screenshots.length > 0 && e("div", { className: "gp-detail-section" },
         e("div", { className: "gp-detail-section-title" }, "Screenshots"),
         e("div", { className: "gp-detail-screens" },
-          game.screenshots.map(s => e("img", {
-            key: s.id,
-            src: s.webp_url || s.jpg_url || s.url,
-            alt: "",
+          game.screenshots.map((s, idx) => e("img", {
+            key:       s.id,
+            src:       s.webp_url || s.jpg_url || s.url,
+            alt:       "",
             className: "gp-detail-screen",
+            loading:   "lazy",
+            "data-original": s.url,
+            onClick:   () => {
+              if (typeof window._openFancybox !== "function") return;
+              const items = game.screenshots.map(sh => ({
+                src:         sh.webp_url || sh.jpg_url || sh.url,
+                originalSrc: sh.url,
+              }));
+              window._openFancybox(items, idx);
+            },
           }))
         )
       )
     );
   }
 
-  function InfoRow({ label, value }) {
-    return e("div", { className: "gp-detail-info-row" },
-      e("div", { className: "gp-detail-info-label" }, label),
-      e("div", { className: "gp-detail-info-value" }, value)
+  // RatingDistBar — small bar chart showing the distribution of 1-5 star
+  // ratings. Each bar is `count / max * height`. Tooltip on hover shows the
+  // exact "N/5: M ratings" breakdown. Mirrors the original bundle.
+  function RatingDistBar({ distribution }) {
+    if (!distribution || !distribution.length) return null;
+    const max = Math.max.apply(null, distribution.map(d => d.count).concat([1]));
+    return e("div", { style: { display: "flex", alignItems: "flex-end", gap: 2, height: 32, marginTop: 8 } },
+      distribution.map(d => e("div", {
+        key:   d.score,
+        title: d.score + "/5: " + d.count + " rating" + (d.count === 1 ? "" : "s"),
+        style: {
+          flex:       1,
+          height:     Math.max(2, Math.round((d.count / max) * 32)) + "px",
+          background: d.count > 0 ? "var(--ac)" : "rgba(255,255,255,.08)",
+          borderRadius: 2,
+          transition: "height .2s",
+        },
+      }))
     );
   }
 
-  function StarRow({ value, onHover, onLeave, onClick, size }) {
+  // StarRow — 5-star rating control. Sends the integer 1-5 to the backend
+  // (Gamepedia.Ratings guards `rating >= 1 and rating <= 5`). The original
+  // bundle used 5 stars; sending 6-10 produces `:invalid_rating` and silently
+  // fails to record the rating.
+  function StarRow({ value, onHover, onLeave, onClick, hover, size }) {
+    const sz = size || 22;
     return e("div", { className: "gp-stars", onMouseLeave: onLeave },
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(s => e("i", {
-        key:        s,
-        className:  "fa-solid fa-star" + (s <= value ? " filled" : ""),
-        style:      { fontSize: size, cursor: "pointer" },
-        onMouseEnter: () => onHover && onHover(s),
-        onClick:    () => onClick && onClick(s),
-      }))
+      [1, 2, 3, 4, 5].map(s => {
+        const filled = s <= (hover || value);
+        return e("i", {
+          key:          s,
+          className:    filled ? "fa-solid fa-star" : "fa-regular fa-star",
+          style:        {
+            fontSize:   sz,
+            color:      filled ? "#a78bfa" : "rgba(255,255,255,.2)",
+            cursor:     onClick ? "pointer" : "default",
+            transition: "color .1s",
+          },
+          onMouseEnter: onHover ? () => onHover(s) : undefined,
+          onClick:      onClick ? () => onClick(s) : undefined,
+        });
+      })
     );
   }
 
@@ -1123,46 +1316,20 @@
   // ---------------------------------------------------------------------------
 
   function GamepediaAdminPanel() {
+    // Only Games / Genres / Stats live here. The host auto-renders the
+    // settings tabs (Credentials / Digest / Post Sidebar) below this panel
+    // from the manifest's settings_tabs + settings_schema. Including them
+    // here too produces a duplicate panel — see AdminExtensions.jsx lines
+    // 944-960 where both the registered admin panel AND the auto-generated
+    // settings form are unconditionally rendered.
     return e(TabbedPanel, {
       tabs: [
-        { key: "games", label: "Games", icon: "fa-gamepad",
+        { key: "games",  label: "Games",  icon: "fa-gamepad",
           render: () => e(GamesAdminTab) },
         { key: "genres", label: "Genres", icon: "fa-tags",
           render: () => e(GenresAdminTab) },
-        { key: "stats", label: "Stats", icon: "fa-chart-bar",
+        { key: "stats",  label: "Stats",  icon: "fa-chart-bar",
           render: () => e(StatsAdminTab) },
-        { key: "digest", label: "Digest", icon: "fa-envelope-open-text",
-          render: () => e(SimpleSettingsPanel, {
-            slug: SLUG,
-            fields: [
-              { key: "digest_new_games_count",      label: "New Games count",      type: "number",
-                hint: "Games to show in the New Games digest section." },
-              { key: "digest_top_gamelogs_count",   label: "Most Gamelog'd count", type: "number",
-                hint: "Games to show in the Most Gamelog'd digest section." },
-              { key: "digest_most_discussed_count", label: "Most Discussed count", type: "number",
-                hint: "Games to show in the Most Discussed digest section." },
-            ],
-          }) },
-        { key: "post_sidebar", label: "Post Sidebar", icon: "fa-window-maximize",
-          render: () => e(SimpleSettingsPanel, {
-            slug: SLUG,
-            fields: [
-              { key: "max_linked_games",  label: "Max linked games per post", type: "number",
-                hint: "How many games an author can link to a single post." },
-              { key: "slideshow_seconds", label: "Slideshow timer (seconds)", type: "number",
-                hint: "How long each linked game shows before rotating to the next." },
-            ],
-          }) },
-        { key: "credentials", label: "Credentials", icon: "fa-key",
-          render: () => e(SimpleSettingsPanel, {
-            slug: SLUG,
-            fields: [
-              { key: "igdb_client_id",     label: "IGDB Client ID",     type: "string",
-                hint: "From dev.twitch.tv — the Client ID for your Twitch application." },
-              { key: "igdb_client_secret", label: "IGDB Client Secret", type: "string", secret: true,
-                hint: "From dev.twitch.tv — the Client Secret. Stored encrypted." },
-            ],
-          }) },
       ],
     });
   }
@@ -1267,37 +1434,33 @@
         ? e(WidgetSpinner)
         : games.length === 0
           ? e(WidgetEmpty, { text: "No games yet. Click Add Game to import some." })
-          : e("div", { className: "gp-admin-games" },
-              games.map(g => e("div", { key: g.id, className: "gp-admin-game" },
+          : e("div", { className: "gp-admin-grid" },
+              games.map(g => e("div", { key: g.id, className: "gp-admin-card" },
                 g.cover_image_url
-                  ? e("img", { src: g.cover_image_url, alt: g.name, className: "gp-admin-game-cover" })
-                  : e("div", { className: "gp-admin-game-cover gp-admin-game-cover-empty" },
-                      e("i", { className: "fa-solid fa-gamepad" })),
-                e("div", { className: "gp-admin-game-info" },
-                  e("div", { className: "gp-admin-game-name" }, g.name),
-                  g.release_year && e("div", { className: "gp-admin-game-meta" }, g.release_year),
-                  g.developer && e("div", { className: "gp-admin-game-meta" }, g.developer),
-                  g.genres && g.genres.length > 0 && e("div", { className: "gp-admin-game-genres" },
+                  ? e("img", { src: g.cover_image_url, alt: g.name, className: "gp-admin-card-cover" })
+                  : e("div", { className: "gp-admin-card-nocover" }, e("i", { className: "fa-solid fa-gamepad" })),
+                e("div", { className: "gp-admin-card-info" },
+                  e("div", { className: "gp-admin-card-name" }, g.name),
+                  g.release_year && e("div", { className: "gp-admin-card-year" }, String(g.release_year)),
+                  g.genres && g.genres.length > 0 && e("div", { className: "gp-admin-card-genres" },
                     g.genres.map(genre => e("span", { key: genre.id, className: "gp-genre-tag" }, genre.name))
                   )
                 ),
-                e("div", { className: "gp-admin-game-actions" },
-                  e("button", { className: "gp-btn-sm", onClick: () => setEditGenreGame(g), title: "Edit genres" },
+                e("div", { className: "gp-admin-card-actions" },
+                  e("button", { className: "gp-admin-btn", title: "Edit genres",
+                    onClick: () => setEditGenreGame(g) },
                     e("i", { className: "fa-solid fa-tags" })),
-                  e("button", { className: "gp-btn-sm", onClick: () => setEditAwardGame(g), title: "Edit awards" },
+                  e("button", { className: "gp-admin-btn", title: "Awards",
+                    onClick: () => setEditAwardGame(g) },
                     e("i", { className: "fa-solid fa-trophy" })),
-                  e("button", { className: "gp-btn-sm",
-                    onClick:  () => refreshGame(g),
+                  e("button", { className: "gp-admin-btn", title: "Refresh from IGDB",
                     disabled: !!refreshing[g.id],
-                    title:    "Re-fetch from IGDB",
-                  },
-                    e("i", { className: refreshing[g.id] ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-sync" })),
-                  e("button", { className: "gp-btn-sm gp-btn-danger",
-                    onClick:  () => deleteGame(g),
+                    onClick:  () => refreshGame(g),
+                  }, e("i", { className: refreshing[g.id] ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-sync" })),
+                  e("button", { className: "gp-admin-btn gp-admin-btn-danger", title: "Delete",
                     disabled: !!deleting[g.id],
-                    title:    "Delete game",
-                  },
-                    e("i", { className: "fa-solid fa-trash" }))
+                    onClick:  () => deleteGame(g),
+                  }, e("i", { className: deleting[g.id] ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-trash" }))
                 )
               ))
             ),
@@ -1403,31 +1566,37 @@
     if (loading) return e(WidgetSpinner);
     if (!stats) return e(WidgetEmpty, { text: "Failed to load stats." });
 
+    // Cards in the same shape and order as the original: total / screenshots
+    // (with MB suffix) / gamelogs / no-genre (warn if > 0) / no-cover (warn).
+    const cards = [
+      { label: "Total Games",     value: stats.total_games },
+      { label: "Screenshots",     value: stats.total_screenshots + " (~" + stats.estimated_disk_mb + " MB)" },
+      { label: "Gamelog Entries", value: stats.total_gamelogs },
+      { label: "No Genre",        value: stats.games_no_genre, warn: stats.games_no_genre > 0 },
+      { label: "No Cover",        value: stats.games_no_cover, warn: stats.games_no_cover > 0 },
+    ];
+
     return e("div", null,
-      e("div", { className: "gp-admin-stats" },
-        e(StatCard, { label: "Total games",       value: stats.total_games }),
-        e(StatCard, { label: "Screenshots",       value: stats.total_screenshots }),
-        e(StatCard, { label: "Storage (MB)",      value: stats.estimated_disk_mb }),
-        e(StatCard, { label: "Games no genre",    value: stats.games_no_genre }),
-        e(StatCard, { label: "Games no cover",    value: stats.games_no_cover }),
-        e(StatCard, { label: "Total gamelogs",    value: stats.total_gamelogs })
-      ),
-      stats.top_gamelog_games && stats.top_gamelog_games.length > 0 && e("div", { className: "gp-admin-stats-section" },
-        e("div", { className: "gp-admin-stats-title" }, "Most gamelog'd"),
-        stats.top_gamelog_games.map(g => e("div", { key: g.id, className: "gp-admin-stats-row" },
-          e("span", null, g.name),
-          e("span", { style: { color: "var(--ac)", fontWeight: 500 } }, g.gamelog_count)
+      e("div", { className: "gp-stats-grid" },
+        cards.map(s => e("div", {
+          key:       s.label,
+          className: "gp-stat-card" + (s.warn ? " warn" : ""),
+        },
+          e("div", { className: "gp-stat-value" }, String(s.value)),
+          e("div", { className: "gp-stat-label" }, s.label)
         ))
+      ),
+      stats.top_gamelog_games && stats.top_gamelog_games.length > 0 && e("div", { className: "gp-stats-top" },
+        e("h4", { className: "gp-stats-top-title" }, "Most Gamelog\u2019d"),
+        e("ol", { className: "gp-stats-top-list" },
+          stats.top_gamelog_games.map(g => e("li", { key: g.id },
+            e("span", null, g.name),
+            e("span", { className: "gp-stats-count" }, g.gamelog_count + " users")
+          ))
+        )
       ),
       e("button", { className: "gp-btn", style: { marginTop: 12 }, onClick: load },
         e("i", { className: "fa-solid fa-sync", style: { marginRight: 6 } }), "Refresh")
-    );
-  }
-
-  function StatCard({ label, value }) {
-    return e("div", { className: "gp-stat-card" },
-      e("div", { className: "gp-stat-value" }, value),
-      e("div", { className: "gp-stat-label" }, label)
     );
   }
 
@@ -1758,22 +1927,50 @@
 .gp-genre-pill:hover{background:rgba(139,92,246,.1);color:var(--ac);border-color:rgba(139,92,246,.3);}
 .gp-genre-pill-count{font-size:10px;color:var(--t5);}
 
-/* ── Post sidebar card ── */
-.gp-postcard{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;overflow:hidden;}
-.gp-postcard-cover-wrap{position:relative;}
-.gp-postcard-cover{width:100%;display:block;border-radius:10px 10px 0 0;}
-.gp-postcard-cover-empty{height:200px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--t5);}
-.gp-postcard-progress{position:absolute;bottom:0;left:0;right:0;height:2px;background:rgba(0,0,0,.3);}
-.gp-postcard-progress-bar{height:100%;background:var(--ac);transition:width .05s linear;}
-.gp-postcard-info{padding:10px 12px 12px;}
-.gp-postcard-name{font-size:13px;font-weight:500;color:var(--t1);cursor:pointer;margin-bottom:3px;}
-.gp-postcard-name:hover{color:var(--ac);}
-.gp-postcard-dev{font-size:11px;color:var(--t4);margin-bottom:6px;}
-.gp-postcard-genres{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px;}
-.gp-postcard-awards{font-size:11px;color:var(--t3);margin-bottom:6px;}
-.gp-postcard-dots{display:flex;gap:4px;justify-content:center;margin-top:8px;}
-.gp-postcard-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.15);border:none;padding:0;cursor:pointer;}
-.gp-postcard-dot.active{background:var(--ac);}
+/* ── Post sidebar card (original gp-psb-* family — cover-bottom overlay style) ── */
+.gp-psb{margin-bottom:16px;}
+.gp-rw-label{font-size:10px;font-weight:500;color:var(--t4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
+.gp-psb-cover-wrap{position:relative;width:100%;aspect-ratio:2/3;border-radius:10px;overflow:hidden;cursor:pointer;margin-bottom:10px;background:rgba(255,255,255,.04);}
+.gp-psb-cover-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s;}
+.gp-psb-cover-wrap:hover .gp-psb-cover-img{transform:scale(1.03);}
+.gp-psb-cover-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--t5);}
+.gp-psb-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(8,6,16,.97) 0%,rgba(8,6,16,.55) 40%,rgba(8,6,16,.08) 75%,transparent 100%);}
+.gp-psb-cover-bottom{position:absolute;bottom:0;left:0;right:0;padding:10px;}
+.gp-psb-genres{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;}
+.gp-psb-genre-pill{font-size:10px;padding:2px 6px;border-radius:20px;background:rgba(139,92,246,.18);border:0.5px solid rgba(139,92,246,.3);color:#a78bfa;}
+.gp-psb-name{font-size:14px;font-weight:500;color:#fff;line-height:1.25;margin-bottom:2px;}
+.gp-psb-sub{font-size:11px;color:rgba(255,255,255,.38);}
+.gp-psb-awards{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+.gp-psb-award{display:flex;align-items:center;background:rgba(251,191,36,.1);border:0.5px solid rgba(251,191,36,.25);border-radius:20px;padding:3px 9px;font-size:10px;color:#fbbf24;width:fit-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gp-psb-award-year{opacity:.5;margin-left:4px;}
+.gp-psb-stats{display:flex;margin-bottom:10px;border:0.5px solid rgba(255,255,255,.07);border-radius:8px;overflow:hidden;}
+.gp-psb-stat{flex:1;padding:7px 4px;text-align:center;border-right:0.5px solid rgba(255,255,255,.07);}
+.gp-psb-stat:last-child{border-right:none;}
+.gp-psb-stat-n{font-size:13px;font-weight:500;color:var(--t1);margin-bottom:1px;}
+.gp-psb-stat-l{font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:.04em;}
+.gp-psb-btn{width:100%;padding:8px 0;border-radius:8px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;margin-bottom:6px;box-sizing:border-box;transition:opacity .12s;}
+.gp-psb-btn:hover{opacity:.85;}
+.gp-psb-btn-view{background:rgba(139,92,246,.15);border:0.5px solid rgba(139,92,246,.35);color:#a78bfa;}
+.gp-psb-btn-log{background:transparent;border:0.5px solid rgba(255,255,255,.12);color:var(--t3);}
+.gp-psb-btn-added{background:rgba(139,92,246,.08);border:0.5px solid rgba(139,92,246,.3);color:#a78bfa;}
+.gp-psb-slideshow{margin:8px 0 6px;}
+.gp-psb-progress-bar{height:2px;background:rgba(255,255,255,.1);border-radius:2px;margin-bottom:8px;overflow:hidden;}
+.gp-psb-progress-fill{height:100%;background:var(--ac);border-radius:2px;transition:width .1s linear;}
+.gp-psb-dots{display:flex;justify-content:center;gap:5px;}
+.gp-psb-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer;transition:background .15s;}
+.gp-psb-dot.active{background:var(--ac);}
+
+/* ── Profile sidebar slot link ── */
+.gp-profile-link{display:flex;align-items:center;padding:6px 10px;font-size:13px;color:var(--t2);text-decoration:none;border-radius:8px;transition:background .12s;}
+.gp-profile-link:hover{background:rgba(255,255,255,.06);color:var(--t1);}
+
+/* ── Now Playing widget ── */
+.gp-now-playing{display:flex;align-items:center;gap:10px;padding:4px 0;}
+.gp-now-playing-cover{width:36px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+.gp-now-playing-nocover{width:36px;height:48px;background:rgba(255,255,255,.06);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--t4);}
+.gp-now-playing-info{min-width:0;}
+.gp-now-playing-label{font-size:10px;color:var(--t4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+.gp-now-playing-name{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 /* ── Gamelog tab / browse ── */
 .gp-gamelog-page{padding:16px 0;}
@@ -1824,40 +2021,47 @@
 .gp-detail-sub{font-size:13px;color:var(--t4);margin-bottom:14px;}
 .gp-detail-summary{font-size:13px;color:var(--t3);line-height:1.6;margin:0 0 16px;}
 .gp-detail-actions{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
-.gp-detail-rating{display:flex;align-items:center;}
+.gp-detail-hero-rating{margin-bottom:4px;}
 .gp-detail-section{margin-bottom:28px;padding:0 4px;}
 .gp-detail-section-title{font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;font-weight:500;}
-.gp-detail-trailer{position:relative;padding-bottom:56.25%;height:0;border-radius:10px;overflow:hidden;}
-.gp-detail-trailer iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+.gp-detail-screen{width:100%;border-radius:6px;display:block;cursor:pointer;}
 .gp-detail-awards{display:flex;flex-direction:column;gap:8px;}
 .gp-award{padding:8px 12px;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;font-size:13px;color:var(--t2);}
 .gp-award-year{color:var(--t4);}
-.gp-detail-info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;}
-.gp-detail-info-row{display:flex;justify-content:space-between;padding:8px 12px;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;font-size:13px;}
-.gp-detail-info-label{color:var(--t4);}
-.gp-detail-info-value{color:var(--t1);font-weight:500;}
-.gp-detail-posts{display:flex;flex-direction:column;gap:6px;}
-.gp-detail-post{padding:10px 14px;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;cursor:pointer;transition:background .12s;}
-.gp-detail-post:hover{background:rgba(255,255,255,.04);}
-.gp-detail-post-loading{padding:10px 14px;color:var(--t5);font-size:12px;}
-.gp-detail-post-title{font-size:14px;font-weight:500;color:var(--t1);margin-bottom:2px;}
-.gp-detail-post-meta{font-size:11px;color:var(--t4);}
+.gp-detail-info-block{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;padding:12px 14px;}
+.gp-detail-info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid rgba(255,255,255,.05);}
+.gp-detail-info-row:last-child{border-bottom:none;}
+.gp-detail-info-key{font-size:12px;color:var(--t4);}
+.gp-detail-info-val{font-size:12px;color:var(--t2);text-align:right;}
+.gp-detail-threads{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;overflow:hidden;}
+.gp-detail-thread-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:0.5px solid var(--b1);cursor:pointer;}
+.gp-detail-thread-row:last-child{border-bottom:none;}
+.gp-detail-thread-row:hover{background:rgba(255,255,255,.03);}
+.gp-detail-thread-avatar{width:28px;height:28px;border-radius:var(--av-radius);object-fit:cover;flex-shrink:0;}
+.gp-detail-thread-avatar-init{background:rgba(139,92,246,.2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:var(--ac);}
+.gp-detail-thread-body{flex:1;min-width:0;}
+.gp-detail-thread-name{font-size:13px;color:var(--t2);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-detail-thread-meta{font-size:11px;color:var(--t4);display:block;margin-top:2px;}
 .gp-detail-screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;}
-.gp-detail-screen{width:100%;border-radius:6px;display:block;}
 
 /* ── Admin panel ── */
 .gp-admin-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
 .gp-admin-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 .gp-admin-count{font-size:12px;color:var(--t4);margin-bottom:10px;}
-.gp-admin-games{display:flex;flex-direction:column;gap:8px;}
-.gp-admin-game{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;}
-.gp-admin-game-cover{width:40px;height:54px;object-fit:cover;border-radius:4px;flex-shrink:0;}
-.gp-admin-game-cover-empty{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);color:var(--t5);}
-.gp-admin-game-info{flex:1;min-width:0;}
-.gp-admin-game-name{font-size:14px;font-weight:500;color:var(--t1);}
-.gp-admin-game-meta{font-size:11px;color:var(--t4);}
-.gp-admin-game-genres{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
-.gp-admin-game-actions{display:flex;gap:4px;flex-shrink:0;}
+.gp-admin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.gp-admin-card{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;}
+.gp-admin-card-cover{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;}
+.gp-admin-card-nocover{width:100%;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--t5);background:rgba(255,255,255,.04);}
+.gp-admin-card-info{padding:8px 8px 4px;}
+.gp-admin-card-name{font-size:12px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-admin-card-year{font-size:11px;color:var(--t4);margin-top:1px;}
+.gp-admin-card-genres{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
+.gp-admin-card-actions{display:flex;gap:4px;padding:4px 6px 6px;}
+.gp-admin-btn{background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:6px;color:var(--t3);cursor:pointer;flex:1;font-size:11px;padding:5px;font-family:inherit;transition:background .12s,color .12s;}
+.gp-admin-btn:hover{background:rgba(255,255,255,.1);color:var(--t1);}
+.gp-admin-btn:disabled{opacity:.4;cursor:default;}
+.gp-admin-btn-danger{color:#fca5a5;border-color:rgba(248,113,113,.3);}
+.gp-admin-btn-danger:hover{background:rgba(248,113,113,.1);color:#fca5a5;}
 .gp-admin-genres{display:flex;flex-direction:column;gap:6px;}
 .gp-admin-genre{display:flex;align-items:center;justify-content:space-between;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;padding:8px 12px;}
 .gp-admin-genre-name{font-size:13px;color:var(--t1);}
@@ -1869,14 +2073,16 @@
 .gp-genre-toggle.active{background:rgba(139,92,246,.18);border-color:rgba(139,92,246,.4);color:var(--ac);}
 
 /* ── Stats ── */
-.gp-admin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px;}
-.gp-stat-card{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;padding:14px 16px;}
+.gp-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px;}
+.gp-stat-card{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;}
+.gp-stat-card.warn{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.05);}
 .gp-stat-value{font-size:20px;font-weight:600;color:var(--t1);}
 .gp-stat-label{font-size:11px;color:var(--t4);margin-top:2px;}
-.gp-admin-stats-section{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;padding:14px 16px;}
-.gp-admin-stats-title{font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;font-weight:500;}
-.gp-admin-stats-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:var(--t2);border-bottom:0.5px solid rgba(255,255,255,.04);}
-.gp-admin-stats-row:last-child{border-bottom:none;}
+.gp-stats-top{margin-bottom:16px;}
+.gp-stats-top-title{font-size:13px;color:var(--t2);margin-bottom:8px;font-weight:500;}
+.gp-stats-top-list{padding-left:18px;}
+.gp-stats-top-list li{display:flex;justify-content:space-between;font-size:13px;color:var(--t2);padding:3px 0;}
+.gp-stats-count{color:var(--t4);font-size:12px;}
 `;
   document.head.appendChild(style);
 
@@ -1961,6 +2167,15 @@
     slug:      SLUG,
     id:        "gamelog",
     component: GamelogTab,
+  });
+
+  // Profile sidebar slot (manifest.slots) — small "Gamelog" link in the
+  // left rail of /profile/:username. Receives {username, current_user}.
+  NE.registerSlot({
+    slug:      SLUG,
+    slot:      "profile_sidebar",
+    component: GamepediaGamelogLink,
+    priority:  50,
   });
 
   // Admin panel (manifest.admin_panel)
