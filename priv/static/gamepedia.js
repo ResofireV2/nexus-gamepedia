@@ -1193,8 +1193,7 @@
       const params = new URLSearchParams({ page: p, sort });
       if (search)      params.set("search", search);
       if (genreFilter) params.set("genre",  genreFilter);
-      fetch("/ext/" + SLUG + "/api/admin/games?" + params, { headers: authHeaders() })
-        .then(r => r.json())
+      apiFetch("/admin/games?" + params)
         .then(d => {
           setGames(prev => append ? [...prev, ...(d.data || [])] : (d.data || []));
           setTotalGames(d.meta?.total || 0);
@@ -1206,8 +1205,7 @@
     }
 
     function loadGenres() {
-      fetch("/ext/" + SLUG + "/api/admin/genres", { headers: authHeaders() })
-        .then(r => r.json())
+      apiFetch("/admin/genres")
         .then(d => setGenres(d.data || []))
         .catch(() => {});
     }
@@ -1217,10 +1215,7 @@
 
     function refreshGame(game) {
       setRefreshing(p => ({ ...p, [game.id]: true }));
-      fetch("/ext/" + SLUG + "/api/admin/games/" + game.id + "/refresh", {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({}),
-      })
-        .then(r => r.json())
+      apiFetch("/admin/games/" + game.id + "/refresh", { method: "POST", body: {} })
         .then(d => { if (d.data) setGames(p => p.map(g => g.id === d.data.id ? { ...g, ...d.data } : g)); })
         .finally(() => setRefreshing(p => ({ ...p, [game.id]: false })));
     }
@@ -1228,10 +1223,7 @@
     function deleteGame(game) {
       if (!confirm("Delete \"" + game.name + "\"? This removes all screenshots and the game's data.")) return;
       setDeleting(p => ({ ...p, [game.id]: true }));
-      fetch("/ext/" + SLUG + "/api/admin/games/" + game.id, {
-        method: "DELETE", headers: authHeaders(),
-      })
-        .then(r => r.json())
+      apiFetch("/admin/games/" + game.id, { method: "DELETE" })
         .then(d => { if (d.ok) setGames(p => p.filter(g => g.id !== game.id)); })
         .finally(() => setDeleting(p => ({ ...p, [game.id]: false })));
     }
@@ -1343,8 +1335,7 @@
 
     function load() {
       setLoading(true);
-      fetch("/ext/" + SLUG + "/api/admin/genres", { headers: authHeaders() })
-        .then(r => r.json())
+      apiFetch("/admin/genres")
         .then(d => { setGenres(d.data || []); setLoading(false); })
         .catch(() => setLoading(false));
     }
@@ -1354,20 +1345,14 @@
     function createGenre() {
       if (!newGenre.trim() || creating) return;
       setCreating(true);
-      fetch("/ext/" + SLUG + "/api/admin/genres", {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ name: newGenre.trim() }),
-      })
-        .then(r => r.json())
+      apiFetch("/admin/genres", { method: "POST", body: { name: newGenre.trim() } })
         .then(d => { if (d.data) { setNewGenre(""); load(); } })
         .finally(() => setCreating(false));
     }
 
     function deleteGenre(genre) {
       if (!confirm("Delete \"" + genre.name + "\"? This unlinks it from all games.")) return;
-      fetch("/ext/" + SLUG + "/api/admin/genres/" + genre.id, {
-        method: "DELETE", headers: authHeaders(),
-      })
-        .then(r => r.json())
+      apiFetch("/admin/genres/" + genre.id, { method: "DELETE" })
         .then(d => { if (d.ok) load(); });
     }
 
@@ -1408,8 +1393,7 @@
 
     function load() {
       setLoading(true);
-      fetch("/ext/" + SLUG + "/api/admin/stats", { headers: authHeaders() })
-        .then(r => r.json())
+      apiFetch("/admin/stats")
         .then(d => { setStats(d.data); setLoading(false); })
         .catch(() => setLoading(false));
     }
@@ -1465,10 +1449,7 @@
     function doSearch(q) {
       if (!q || q.length < 2) { setResults([]); return; }
       setLoading(true); setError(null);
-      fetch("/ext/" + SLUG + "/api/games/search?q=" + encodeURIComponent(q), {
-        headers: authHeaders(),
-      })
-        .then(r => r.json())
+      apiFetch("/games/search?q=" + encodeURIComponent(q))
         .then(r => {
           setLoading(false);
           setResults(r.data || []);
@@ -1479,11 +1460,7 @@
 
     function addGame(game) {
       setAdding(p => ({ ...p, [game.igdb_id]: true }));
-      fetch("/ext/" + SLUG + "/api/admin/games/import", {
-        method: "POST", headers: authHeaders(),
-        body:   JSON.stringify({ igdb_id: game.igdb_id }),
-      })
-        .then(r => r.json())
+      apiFetch("/admin/games/import", { method: "POST", body: { igdb_id: game.igdb_id } })
         .then(r => {
           if (r.error) { setError(r.error); return; }
           setAdded(p => ({ ...p, [game.igdb_id]: true }));
@@ -1562,8 +1539,7 @@
 
     function loadAwards() {
       setLoading(true);
-      fetch("/ext/" + SLUG + "/api/admin/games/" + game.id + "/awards", { headers: authHeaders() })
-        .then(r => r.json())
+      apiFetch("/admin/games/" + game.id + "/awards")
         .then(d => { setAwards(d.data || []); setLoading(false); })
         .catch(() => setLoading(false));
     }
@@ -1574,11 +1550,9 @@
       const y = parseInt(newYear);
       if (!y || !newTitle.trim() || adding) return;
       setAdding(true);
-      fetch("/ext/" + SLUG + "/api/admin/games/" + game.id + "/awards", {
-        method: "POST", headers: authHeaders(),
-        body:   JSON.stringify({ year: y, title: newTitle.trim() }),
+      apiFetch("/admin/games/" + game.id + "/awards", {
+        method: "POST", body: { year: y, title: newTitle.trim() },
       })
-        .then(r => r.json())
         .then(d => { if (d.ok) { setNewYear(""); setNewTitle(""); loadAwards(); } })
         .finally(() => setAdding(false));
     }
@@ -1586,20 +1560,15 @@
     function saveEdit(id) {
       const y = parseInt(editYear);
       if (!y || !editTitle.trim()) return;
-      fetch("/ext/" + SLUG + "/api/admin/awards/" + id, {
-        method: "PATCH", headers: authHeaders(),
-        body:   JSON.stringify({ year: y, title: editTitle.trim() }),
+      apiFetch("/admin/awards/" + id, {
+        method: "PATCH", body: { year: y, title: editTitle.trim() },
       })
-        .then(r => r.json())
         .then(d => { if (d.ok) { setEditing(null); loadAwards(); } });
     }
 
     function deleteAward(id) {
       if (!confirm("Delete award?")) return;
-      fetch("/ext/" + SLUG + "/api/admin/awards/" + id, {
-        method: "DELETE", headers: authHeaders(),
-      })
-        .then(r => r.json())
+      apiFetch("/admin/awards/" + id, { method: "DELETE" })
         .then(d => { if (d.ok) loadAwards(); });
     }
 
@@ -1676,11 +1645,9 @@
 
     function save() {
       setSaving(true);
-      fetch("/ext/" + SLUG + "/api/admin/games/" + game.id + "/genres", {
-        method: "POST", headers: authHeaders(),
-        body:   JSON.stringify({ genre_ids: Array.from(selected) }),
+      apiFetch("/admin/games/" + game.id + "/genres", {
+        method: "POST", body: { genre_ids: Array.from(selected) },
       })
-        .then(r => r.json())
         .then(d => {
           if (d.ok) {
             const updatedGenres = genres

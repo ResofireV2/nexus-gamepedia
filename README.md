@@ -1,3 +1,5 @@
+![Gamepedia — your gaming encyclopedia](priv/static/banner.webp)
+
 # Gamepedia for Nexus
 
 A game database extension for Nexus powered by IGDB. Browse games, link forum threads to games, track your gamelog, rate games, and award accolades — all running inside the Nexus VM with no separate service or container required.
@@ -24,7 +26,7 @@ Nexus will fetch the new release tarball, purge the old compiled modules, recomp
 2. Go to Console → Applications → Register Your Application
 3. Set OAuth Redirect URL to `http://localhost`, Client Type to Confidential
 4. Copy the Client ID and generate a Client Secret
-5. In Nexus admin → Extensions → Gamepedia → **Settings** → enter your Client ID and Client Secret → Save
+5. In Nexus admin → Extensions → Gamepedia → **Credentials** tab → enter your Client ID and Client Secret → Save
 
 ## Features
 
@@ -35,5 +37,5 @@ Nexus will fetch the new release tarball, purge the old compiled modules, recomp
 - **Awards** — admin-curated accolades (e.g. "Game of the Year 2024") displayed on game pages
 - **Post linking** — link any forum thread to a game via the composer toolbar
 - **Admin panel** — import/refresh/delete games, manage genres, manage awards, view stats
-- **Digest integration** — "New Games" and "Most Gamelog'd" sections in the Nexus digest email
+- **Digest integration** — "New Games", "Most Gamelog'd", and "Most Discussed" sections in the Nexus digest email
 - **Sidebar integration** — Gamepedia browse link in the left sidebar, Now Playing widget in the right panel
