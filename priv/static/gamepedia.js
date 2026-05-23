@@ -2280,18 +2280,6 @@
     priority: 60,
   });
 
-  // Account action — "My Gamelog" on the current user's menu.
-  NE.registerAccountAction({
-    id:    "gamepedia-my-gamelog",
-    label: "My Gamelog",
-    icon:  "fa-gamepad",
-    onClick({ currentUser, close }) {
-      close && close();
-      if (currentUser?.username) nav("/profile/" + currentUser.username + "/gamelog");
-    },
-    priority: 60,
-  });
-
   // ---------------------------------------------------------------------------
   // Config bootstrap — fetch UI-affecting settings once and cache on window.
   //
