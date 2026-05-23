@@ -33,9 +33,4 @@ defmodule Gamepedia.Games.Game do
     |> unique_constraint(:igdb_id)
     |> unique_constraint(:slug)
   end
-
-  def release_year(%__MODULE__{first_release_date: nil}), do: nil
-  def release_year(%__MODULE__{first_release_date: ts}) do
-    ts |> DateTime.from_unix!() |> Map.get(:year)
-  end
 end

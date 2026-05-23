@@ -87,12 +87,4 @@ defmodule Gamepedia.Ratings do
   # Returns %{game_id => rating}
   # ---------------------------------------------------------------------------
 
-  def user_ratings_for_games(user_id, game_ids) when is_list(game_ids) do
-    from(r in @table,
-      where: r.user_id == ^user_id and r.game_id in ^game_ids,
-      select: {r.game_id, r.rating}
-    )
-    |> Repo.all()
-    |> Map.new()
-  end
 end

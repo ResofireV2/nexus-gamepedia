@@ -18,8 +18,7 @@ defmodule Gamepedia.Router do
     get  "/widgets/most-discussed", WidgetController, :most_discussed
     get  "/widgets/most-gamelogd",  WidgetController, :most_gamelogd
 
-    # Public — post game links
-    post "/posts/:post_id/games", PostGameController, :create
+    # Public — post ↔ game association (reads only; writes via attach() / persist_attachment/3)
     get  "/posts/:post_id/games", PostGameController, :index
     get  "/games/:game_id/posts", PostGameController, :posts_for_game
 

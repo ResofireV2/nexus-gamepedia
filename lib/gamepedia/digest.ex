@@ -5,7 +5,7 @@ defmodule Gamepedia.Digest do
   alias Nexus.Repo
   alias Gamepedia.Games.Game
 
-  def new_games(%{from: from_dt, to: to_dt}, settings \\ %{}, branding \\ %{}) do
+  def new_games(%{from: from_dt, to: to_dt}, settings \\ %{}) do
     limit = get_count(settings, "digest_new_games_count", 6)
     games = Repo.all(from g in Game,
       where: g.inserted_at >= ^from_dt and g.inserted_at <= ^to_dt,
@@ -23,12 +23,12 @@ defmodule Gamepedia.Digest do
           url: "/ext/gamepedia/games/#{g.slug}"}
       end)
 
-      rendered = render_game_cards("New Games", items, nil, branding)
+      rendered = render_game_cards("New Games", items, nil, branding())
       %{"_rendered_html" => rendered}
     end
   end
 
-  def top_gamelogs(%{from: from_dt}, settings \\ %{}, branding \\ %{}) do
+  def top_gamelogs(%{from: from_dt}, settings \\ %{}) do
     limit = get_count(settings, "digest_top_gamelogs_count", 6)
     games = Repo.all(from g in Game,
       join: gl in "gamepedia_gamelogs", on: gl.game_id == g.id,
@@ -48,16 +48,16 @@ defmodule Gamepedia.Digest do
           cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
       end)
 
-      rendered = render_game_cards("Most Gamelog\u2019d", items, nil, branding)
+      rendered = render_game_cards("Most Gamelog\u2019d", items, nil, branding())
       %{"_rendered_html" => rendered}
     end
   end
 
-  def most_discussed(%{from: from_dt, to: to_dt}, settings \\ %{}, branding \\ %{}) do
+  def most_discussed(%{from: from_dt, to: to_dt}, settings \\ %{}) do
     limit = get_count(settings, "digest_most_discussed_count", 6)
     games = Repo.all(from g in Game,
-      join: pg in "gamepedia_post_games", on: pg.game_id == g.id,
-      join: p in Nexus.Forum.Post, on: p.id == pg.post_id,
+      join: pg in "gamepedia_post_game", on: pg.game_id == g.id,
+      join: p in "posts", on: p.id == pg.post_id,
       where: pg.inserted_at >= ^from_dt and pg.inserted_at <= ^to_dt,
       where: p.hidden == false,
       group_by: [g.id, g.name, g.slug, g.developer, g.cover_image_url, g.first_release_date],
@@ -75,10 +75,18 @@ defmodule Gamepedia.Digest do
           cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
       end)
 
-      rendered = render_game_cards("Most Discussed", items, nil, branding)
+      rendered = render_game_cards("Most Discussed", items, nil, branding())
       %{"_rendered_html" => rendered}
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Branding — pulled from Nexus.Mailer so digest HTML matches the forum's
+  # configured colours. The 3-arity digest contract doesn't pass branding as
+  # a callback param; extensions fetch it themselves.
+  # ---------------------------------------------------------------------------
+
+  defp branding, do: Nexus.Mailer.branding_context()
 
   # ---------------------------------------------------------------------------
   # HTML renderer — game card grid

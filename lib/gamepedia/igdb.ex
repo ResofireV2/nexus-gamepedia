@@ -3,11 +3,12 @@ defmodule Gamepedia.Igdb do
   IGDB API client.
 
   Handles Twitch OAuth token acquisition and caching, game search,
-  and full game data fetch. Uses the Req HTTP client already in mix.exs.
+  and full game data fetch. Uses the Req HTTP client already in
+  Nexus's dependency tree.
 
-  Credentials are passed in at call time from extension settings
-  (stored in Nexus and forwarded on webhook events). This means
-  no credentials need to be baked into the service config.
+  Credentials are read from Gamepedia's extension settings
+  (`Gamepedia.Settings.igdb_credentials/0`) by the controllers that
+  call this module — they are never passed in from the client.
   """
 
   @twitch_token_url "https://id.twitch.tv/oauth2/token"

@@ -1,6 +1,16 @@
 defmodule Gamepedia.PostGames do
   @moduledoc """
   Context for linking games to forum posts.
+
+  Writes go through `link_games/2`, called from
+  `Gamepedia.persist_attachment/3` when a user submits a post with
+  `{kind: "game_link", data: {game_id: ...}}` attachments produced by the
+  toolbar button's `attach()` calls (see manifest `side_data` declaration
+  and the extension guide §6.3 / §8.9).
+
+  Reads serve the linked-games widget and the per-game thread list.
+  Cleanup on post deletion is handled by `delete_links_for_post/1`, invoked
+  from `Gamepedia.handle_event("post_deleted", ...)`.
   """
 
   import Ecto.Query
@@ -55,10 +65,9 @@ defmodule Gamepedia.PostGames do
   end
 
   # ---------------------------------------------------------------------------
-  # Delete all game links for a post (called on post_deleted webhook)
+  # List post IDs linked to a game
   # ---------------------------------------------------------------------------
 
-  # List post IDs linked to a game
   def list_posts_for_game(game_id) do
     from(pg in @post_game_table,
       where: pg.game_id == ^game_id,
@@ -73,6 +82,10 @@ defmodule Gamepedia.PostGames do
     from(pg in @post_game_table, where: pg.game_id == ^game_id)
     |> Repo.aggregate(:count)
   end
+
+  # ---------------------------------------------------------------------------
+  # Cascade cleanup — called from handle_event("post_deleted", ...)
+  # ---------------------------------------------------------------------------
 
   def delete_links_for_post(post_id) do
     from(pg in @post_game_table, where: pg.post_id == ^post_id)

@@ -8,17 +8,34 @@ defmodule Gamepedia.AdminGameController do
   alias Gamepedia.Games.Game
 
   # ---------------------------------------------------------------------------
-  # Admin auth guard — every action goes through this first
+  # Auth guards
   # ---------------------------------------------------------------------------
 
   defp admin_required(conn, action) do
     case require_admin(conn) do
       :ok ->
         action.(conn)
+
       {:error, :unauthorized} ->
         conn |> put_status(:unauthorized) |> json(%{error: "Not authenticated"})
+
       {:error, :forbidden} ->
         conn |> put_status(:forbidden) |> json(%{error: "Admin access required"})
+    end
+  end
+
+  # Resolves IGDB creds from extension settings and runs `fun` with them, or
+  # responds 503 if creds are missing. Used by import + refresh which both
+  # need IGDB access.
+  defp with_igdb_credentials(conn, fun) do
+    case Gamepedia.Settings.igdb_credentials() do
+      nil ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{error: "IGDB credentials not configured. Set Client ID and Secret in the Credentials tab."})
+
+      {cid, cs} ->
+        fun.(cid, cs)
     end
   end
 
@@ -26,33 +43,48 @@ defmodule Gamepedia.AdminGameController do
   # Actions
   # ---------------------------------------------------------------------------
 
-  def import(conn, %{"igdb_id" => igdb_id, "client_id" => cid, "client_secret" => cs}) do
+  def import(conn, %{"igdb_id" => igdb_id}) do
     admin_required(conn, fn conn ->
-      case Games.import_game(parse_int(igdb_id), cid, cs) do
-        {:ok, game}               -> conn |> put_status(:created) |> json(%{data: GameController.game_summary(game)})
-        {:error, :already_exists} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "This game has already been imported"})
-        {:error, :not_found}      -> conn |> put_status(:not_found) |> json(%{error: "Game not found on IGDB"})
-        {:error, reason} when is_binary(reason) -> conn |> put_status(:bad_gateway) |> json(%{error: reason})
-        {:error, changeset}       -> conn |> put_status(:unprocessable_entity) |> json(%{error: format_errors(changeset)})
-      end
+      with_igdb_credentials(conn, fn cid, cs ->
+        case Games.import_game(parse_int(igdb_id), cid, cs) do
+          {:ok, game} ->
+            conn |> put_status(:created) |> json(%{data: GameController.game_summary(game)})
+
+          {:error, :already_exists} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "This game has already been imported"})
+
+          {:error, :not_found} ->
+            conn |> put_status(:not_found) |> json(%{error: "Game not found on IGDB"})
+
+          {:error, reason} when is_binary(reason) ->
+            conn |> put_status(:bad_gateway) |> json(%{error: reason})
+
+          {:error, changeset} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: format_errors(changeset)})
+        end
+      end)
     end)
   end
 
   def import(conn, _),
-    do: conn |> put_status(:bad_request) |> json(%{error: "Required: igdb_id, client_id, client_secret"})
+    do: conn |> put_status(:bad_request) |> json(%{error: "Required: igdb_id"})
 
-  def refresh(conn, %{"id" => id, "client_id" => cid, "client_secret" => cs}) do
+  def refresh(conn, %{"id" => id}) do
     admin_required(conn, fn conn ->
-      case Games.refresh_game(parse_int(id), cid, cs) do
-        {:ok, game}          -> json(conn, %{data: GameController.game_summary(game)})
-        {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "Game not found"})
-        {:error, reason} when is_binary(reason) -> conn |> put_status(:bad_gateway) |> json(%{error: reason})
-      end
+      with_igdb_credentials(conn, fn cid, cs ->
+        case Games.refresh_game(parse_int(id), cid, cs) do
+          {:ok, game} ->
+            json(conn, %{data: GameController.game_summary(game)})
+
+          {:error, :not_found} ->
+            conn |> put_status(:not_found) |> json(%{error: "Game not found"})
+
+          {:error, reason} when is_binary(reason) ->
+            conn |> put_status(:bad_gateway) |> json(%{error: reason})
+        end
+      end)
     end)
   end
-
-  def refresh(conn, _),
-    do: conn |> put_status(:bad_request) |> json(%{error: "Required: client_id, client_secret"})
 
   def update_genres(conn, %{"id" => id, "genre_ids" => genre_ids}) do
     admin_required(conn, fn conn ->

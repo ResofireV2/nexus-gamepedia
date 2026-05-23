@@ -1,13 +1,177 @@
 {
-  "slug": "gamepedia",
-  "name": "Gamepedia",
-  "description": "A game database powered by IGDB. Browse games, link threads to games, and track your gamelog.",
-  "author": "ResofireV2",
-  "homepage": "https://github.com/ResofireV2/nexus-gamepedia",
-  "logo_url": "/ext/gamepedia/assets/logo.webp",
-  "banner_url": "/ext/gamepedia/assets/banner.webp",
-  "categories": [
-    "games",
-    "integrations"
+  "manifest_version": 2,
+  "name":             "Gamepedia",
+  "slug":             "gamepedia",
+  "version":          "1.0.0",
+  "description":      "A game database powered by IGDB. Browse games, link threads to games, and track your gamelog.",
+  "author":           "ResofireV2",
+  "homepage":         "https://github.com/ResofireV2/nexus-gamepedia",
+  "repository":       "https://github.com/ResofireV2/nexus-gamepedia",
+  "license":          "MIT",
+  "logo_url":         "/ext/gamepedia/assets/logo.webp",
+  "banner_url":       "/ext/gamepedia/assets/banner.webp",
+  "tags":             ["games", "integrations"],
+
+  "module":     "Gamepedia",
+  "js_bundle":  "gamepedia.js",
+
+  "settings_schema": {
+    "igdb_client_id": {
+      "type":        "string",
+      "label":       "IGDB Client ID",
+      "placeholder": "Your Twitch app client ID",
+      "required":    true
+    },
+    "igdb_client_secret": {
+      "type":        "string",
+      "label":       "IGDB Client Secret",
+      "placeholder": "Your Twitch app client secret",
+      "secret":      true,
+      "required":    true
+    },
+    "digest_new_games_count": {
+      "type":    "integer",
+      "label":   "New Games digest count",
+      "default": 6
+    },
+    "digest_top_gamelogs_count": {
+      "type":    "integer",
+      "label":   "Most Gamelog'd digest count",
+      "default": 6
+    },
+    "digest_most_discussed_count": {
+      "type":    "integer",
+      "label":   "Most Discussed digest count",
+      "default": 6
+    },
+    "max_linked_games": {
+      "type":    "integer",
+      "label":   "Max linked games per post",
+      "default": 3
+    },
+    "slideshow_seconds": {
+      "type":    "integer",
+      "label":   "Slideshow timer (seconds)",
+      "default": 5
+    }
+  },
+
+  "settings_tabs": [
+    {
+      "key":    "credentials",
+      "label":  "Credentials",
+      "icon":   "fa-key",
+      "fields": ["igdb_client_id", "igdb_client_secret"]
+    },
+    {
+      "key":    "digest",
+      "label":  "Digest",
+      "icon":   "fa-envelope-open-text",
+      "fields": ["digest_new_games_count", "digest_top_gamelogs_count", "digest_most_discussed_count"]
+    },
+    {
+      "key":    "post_sidebar",
+      "label":  "Post Sidebar",
+      "icon":   "fa-window-maximize",
+      "fields": ["max_linked_games", "slideshow_seconds"]
+    }
+  ],
+
+  "hooks": [
+    { "event": "post_deleted", "priority": 50 }
+  ],
+
+  "side_data": [
+    { "entity": "post", "kind": "game_link" }
+  ],
+
+  "routes": [
+    { "path": "/games/:slug", "title": "Game" },
+    { "path": "/browse",      "title": "Browse Games" }
+  ],
+
+  "admin_panel": {
+    "label": "Gamepedia",
+    "icon":  "fa-gamepad"
+  },
+
+  "explore": {
+    "label": "Gamepedia",
+    "icon":  "fa-gamepad",
+    "path":  "/browse"
+  },
+
+  "digest_sections": [
+    {
+      "key":                "gamepedia_new_games",
+      "label":              "New Games",
+      "icon":               "fa-gamepad",
+      "enabled_by_default": true
+    },
+    {
+      "key":                "gamepedia_top_gamelogs",
+      "label":              "Most Gamelog'd",
+      "icon":               "fa-star",
+      "enabled_by_default": true
+    },
+    {
+      "key":                "gamepedia_most_discussed",
+      "label":              "Most Discussed",
+      "icon":               "fa-comments",
+      "enabled_by_default": true
+    }
+  ],
+
+  "right_widgets": [
+    {
+      "id":       "gamepedia-post-card",
+      "label":    "Linked Games",
+      "scope":    { "corePages": ["post"] },
+      "priority": 50
+    },
+    {
+      "id":       "gamepedia-most-discussed",
+      "label":    "Most Discussed Games",
+      "scope":    { "path": ["/browse", "/games/:slug"] },
+      "priority": 50
+    },
+    {
+      "id":       "gamepedia-most-gamelogd",
+      "label":    "Most Gamelog'd Games",
+      "scope":    { "path": ["/browse", "/games/:slug"] },
+      "priority": 51
+    },
+    {
+      "id":       "gamepedia-genre-explorer",
+      "label":    "Genre Explorer",
+      "scope":    { "path": ["/browse", "/games/:slug"] },
+      "priority": 52
+    },
+    {
+      "id":       "gamepedia-now-playing",
+      "label":    "Now Playing",
+      "scope":    { "path": ["/browse", "/games/:slug"] },
+      "priority": 53
+    }
+  ],
+
+  "toolbar_buttons": [
+    {
+      "id":       "gamepedia-link-game",
+      "icon":     "fa-solid fa-gamepad",
+      "tip":      "Link a game",
+      "scope":    "posts",
+      "priority": 50
+    }
+  ],
+
+  "profile_tabs": [
+    {
+      "id":         "gamelog",
+      "label":      "Gamelog",
+      "icon":       "fa-bookmark",
+      "visibility": "always",
+      "priority":   50
+    }
   ]
 }

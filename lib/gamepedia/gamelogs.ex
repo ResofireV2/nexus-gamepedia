@@ -2,10 +2,11 @@ defmodule Gamepedia.Gamelogs do
   @moduledoc """
   Context for gamelog operations — add, remove, toggle playing, list.
 
-  NOTE: Gamepedia runs in its own database. It has no access to the Nexus
-  users table. All user identity comes from the X-Nexus-User-Id header
-  that the Nexus proxy injects on every authenticated request.
-  Usernames are stored denormalized in the gamelog for display purposes.
+  Each gamelog row stores `user_id` (the Nexus user id, resolved from
+  `conn.assigns.current_user` by the controller) and `game_id`. Joins against
+  Nexus tables are done by string table name (e.g. `"users"`) rather than by
+  aliasing the schema, per the extension guide §8.10 — keeps the extension
+  decoupled from Nexus's internal schema modules.
   """
 
   import Ecto.Query
@@ -82,17 +83,9 @@ defmodule Gamepedia.Gamelogs do
   end
 
   # ---------------------------------------------------------------------------
-  # Check if a game is in a user's gamelog
-  # ---------------------------------------------------------------------------
-
-  def in_gamelog?(user_id, game_id) do
-    from(g in @table, where: g.user_id == ^user_id and g.game_id == ^game_id)
-    |> Repo.exists?()
-  end
-
-  # ---------------------------------------------------------------------------
-  # List a user's gamelog by user_id (paginated, filterable, sortable)
-  # No join against Nexus users table — user_id comes from the proxy header.
+  # List a user's gamelog by user_id (paginated, filterable, sortable).
+  # user_id is the canonical Nexus user id, resolved from conn.assigns.current_user
+  # by the caller — no cross-database join against Nexus's users table is done here.
   # ---------------------------------------------------------------------------
 
   def list(user_id, params \\ %{}) do

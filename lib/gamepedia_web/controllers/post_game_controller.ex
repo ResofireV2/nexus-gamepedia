@@ -1,28 +1,42 @@
 defmodule Gamepedia.PostGameController do
+  @moduledoc """
+  Read endpoints for the post ↔ game association table.
+
+  Writes are NOT served here. Linking games to a post happens through the
+  composer attach() flow: the toolbar button calls attach({kind, data})
+  client-side, Nexus dispatches each attachment to
+  `Gamepedia.persist_attachment/3` after the post is committed. That callback
+  is the only writer of `gamepedia_post_game` rows that originate from user
+  action.
+
+  Cleanup on post deletion is handled by `Gamepedia.PostGames.delete_links_for_post/1`,
+  invoked from `Gamepedia.handle_event("post_deleted", ...)`.
+  """
+
   use Phoenix.Controller, formats: [:json]
   import Gamepedia.ControllerHelpers
   alias Gamepedia.PostGames
 
-  def create(conn, %{"post_id" => post_id, "game_ids" => game_ids}) do
-    gids = Enum.map(List.wrap(game_ids), &parse_int/1) |> Enum.uniq()
-    case PostGames.link_games(parse_int(post_id), gids) do
-      :ok              -> json(conn, %{ok: true})
-      {:error, reason} -> conn |> put_status(:unprocessable_entity) |> json(%{error: reason})
-    end
-  end
-  def create(conn, _), do: conn |> put_status(:bad_request) |> json(%{error: "Required: game_ids (array)"})
-
+  # GET /posts/:post_id/games — list games linked to a post
   def index(conn, %{"post_id" => post_id}) do
     games = PostGames.list_games_for_post(parse_int(post_id))
     json(conn, %{data: Enum.map(games, &game_json/1)})
   end
 
+  # GET /games/:game_id/posts — list posts that link to a game
   def posts_for_game(conn, %{"game_id" => game_id}) do
     json(conn, %{data: PostGames.list_posts_for_game(parse_int(game_id))})
   end
 
   defp game_json(g) do
-    %{id: g.id, name: g.name, slug: g.slug, cover_image_url: g.cover_image_url,
-      release_year: release_year(g.first_release_date), developer: g.developer, publisher: g.publisher}
+    %{
+      id:              g.id,
+      name:            g.name,
+      slug:            g.slug,
+      cover_image_url: g.cover_image_url,
+      release_year:    release_year(g.first_release_date),
+      developer:       g.developer,
+      publisher:       g.publisher,
+    }
   end
 end

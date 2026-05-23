@@ -4,27 +4,13 @@ defmodule Gamepedia do
 
   Powered by IGDB. Browse games, link threads to games, track your gamelog.
   Runs inside the Nexus VM with no separate container or service required.
+
+  All identity, surfaces, and settings are declared in `manifest.json`
+  (manifest_version 2). This module provides only the Elixir-side
+  callback implementations.
   """
 
   use Nexus.Extensions.Behaviour
-
-  # ---------------------------------------------------------------------------
-  # Manifest
-  # ---------------------------------------------------------------------------
-
-  @impl true
-  def manifest do
-    %{
-      slug:        "gamepedia",
-      name:        "Gamepedia",
-      description: "A game database powered by IGDB. Browse games, link threads to games, and track your gamelog.",
-      author:      "ResofireV2",
-      homepage:    "https://github.com/ResofireV2/nexus-gamepedia",
-      logo_url:    "/ext/gamepedia/assets/logo.webp",
-      banner_url:  "/ext/gamepedia/assets/banner.webp",
-      categories:  ["games", "integrations"],
-    }
-  end
 
   # ---------------------------------------------------------------------------
   # Migrations — run by Nexus on install/update, rolled back on uninstall
@@ -46,7 +32,7 @@ defmodule Gamepedia do
   end
 
   # ---------------------------------------------------------------------------
-  # API routes — mounted at /ext/gamepedia/ by Nexus
+  # API routes — mounted at /ext/gamepedia/api/ by Nexus's ExtensionRouter
   # ---------------------------------------------------------------------------
 
   @impl true
@@ -70,125 +56,47 @@ defmodule Gamepedia do
   # ---------------------------------------------------------------------------
 
   @impl true
-  def on_install(_settings), do: :ok
-
-  @impl true
-  def on_update(_from, _to), do: :ok
-
-  @impl true
   def on_uninstall do
-    # Clean up screenshot files
+    # Clean up screenshot files and any other extension-owned storage.
     Nexus.Extensions.Storage.delete_all("gamepedia")
     :ok
   end
 
   # ---------------------------------------------------------------------------
-  # JS bundle
+  # Compose attachment persistence (side_data)
+  #
+  # Toolbar button "gamepedia-link-game" calls attach({kind, data}) for each
+  # selected game. Nexus dispatches each attachment here after the post is
+  # committed. One attachment = one game link.
   # ---------------------------------------------------------------------------
 
   @impl true
-  def js_bundle_path, do: "gamepedia.js"
-
-  # ---------------------------------------------------------------------------
-  # Admin settings schema
-  # ---------------------------------------------------------------------------
-
-  @impl true
-  def settings_schema do
-    %{
-      "igdb_client_id" => %{
-        "type"        => "string",
-        "label"       => "IGDB Client ID",
-        "placeholder" => "Your Twitch app client ID",
-        "required"    => true,
-      },
-      "igdb_client_secret" => %{
-        "type"        => "string",
-        "label"       => "IGDB Client Secret",
-        "placeholder" => "Your Twitch app client secret",
-        "secret"      => true,
-        "required"    => true,
-      },
-      "digest_new_games_count" => %{
-        "type"    => "integer",
-        "label"   => "New Games digest count",
-        "default" => 6,
-      },
-      "digest_top_gamelogs_count" => %{
-        "type"    => "integer",
-        "label"   => "Most Gamelog'd digest count",
-        "default" => 6,
-      },
-      "digest_most_discussed_count" => %{
-        "type"    => "integer",
-        "label"   => "Most Discussed digest count",
-        "default" => 6,
-      },
-      "max_linked_games" => %{
-        "type"    => "integer",
-        "label"   => "Max linked games per post",
-        "default" => 3,
-      },
-      "slideshow_seconds" => %{
-        "type"    => "integer",
-        "label"   => "Slideshow timer (seconds)",
-        "default" => 5,
-      },
-    }
+  def persist_attachment("post", post_id, %{"kind" => "game_link", "data" => %{"game_id" => game_id}})
+      when is_integer(game_id) do
+    Gamepedia.PostGames.link_games(post_id, [game_id])
   end
 
-  @impl true
-  def settings_tabs do
-    [
-      %{
-        "key"    => "credentials",
-        "label"  => "Credentials",
-        "icon"   => "fa-key",
-        "fields" => ["igdb_client_id", "igdb_client_secret"],
-      },
-    ]
-  end
+  def persist_attachment(_entity, _entity_id, _attachment), do: :ok
 
   # ---------------------------------------------------------------------------
   # Digest sections
+  #
+  # Branding (colours) comes from Nexus.Mailer.branding_context/0 rather than
+  # being passed as a 4th argument; the 3-arity callback is the contract.
   # ---------------------------------------------------------------------------
 
   @impl true
-  def digest_sections do
-    [
-      %{
-        key:                "gamepedia_new_games",
-        label:              "New Games",
-        icon:               "fa-gamepad",
-        enabled_by_default: true,
-      },
-      %{
-        key:                "gamepedia_top_gamelogs",
-        label:              "Most Gamelog'd",
-        icon:               "fa-star",
-        enabled_by_default: true,
-      },
-      %{
-        key:                "gamepedia_most_discussed",
-        label:              "Most Discussed",
-        icon:               "fa-comments",
-        enabled_by_default: true,
-      },
-    ]
+  def handle_digest_section("gamepedia_new_games", period, settings) do
+    Gamepedia.Digest.new_games(period, settings)
   end
 
-  @impl true
-  def handle_digest_section("gamepedia_new_games", period, settings, branding) do
-    Gamepedia.Digest.new_games(period, settings, branding)
+  def handle_digest_section("gamepedia_top_gamelogs", period, settings) do
+    Gamepedia.Digest.top_gamelogs(period, settings)
   end
 
-  def handle_digest_section("gamepedia_top_gamelogs", period, settings, branding) do
-    Gamepedia.Digest.top_gamelogs(period, settings, branding)
+  def handle_digest_section("gamepedia_most_discussed", period, settings) do
+    Gamepedia.Digest.most_discussed(period, settings)
   end
 
-  def handle_digest_section("gamepedia_most_discussed", period, settings, branding) do
-    Gamepedia.Digest.most_discussed(period, settings, branding)
-  end
-
-  def handle_digest_section(_key, _period, _settings, _branding), do: %{items: []}
+  def handle_digest_section(_key, _period, _settings), do: %{items: []}
 end
