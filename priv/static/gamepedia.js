@@ -802,6 +802,19 @@
               [game.developer, game.publisher, game.release_year].filter(Boolean).join(" \u00b7 ")
             ),
             game.summary && e("p", { className: "gp-detail-summary" }, game.summary),
+
+            // Awards ribbon — gold trophy chips listing every award attached
+            // to this game. Shown alongside the title rather than only in the
+            // body's "Awards & recognition" section, so the accolade is the
+            // first thing a viewer notices in the header.
+            awards.length > 0 && e("div", { className: "gp-detail-hero-awards" },
+              awards.map(a => e("span", { key: a.id, className: "gp-detail-hero-award" },
+                e("i", { className: "fa-solid fa-trophy", style: { fontSize: 10 } }),
+                a.title,
+                a.year && e("span", { className: "gp-detail-hero-award-year" }, a.year)
+              ))
+            ),
+
             currentUser && e("div", { className: "gp-detail-actions" },
               e("button", {
                 className: "gp-btn-primary" + (inGamelog ? " gp-btn-active" : ""),
@@ -847,7 +860,7 @@
                   onClick: submitRating,
                 })
               ),
-              ratingDist && ratingDist.length > 0 && ratingCount > 0 && e(RatingDistBar, { distribution: ratingDist })
+              ratingDist && ratingDist.length > 0 && ratingCount >= 3 && e(RatingDistBar, { distribution: ratingDist })
             )
           )
         )
@@ -991,8 +1004,8 @@
         title: d.score + "/5: " + d.count + " rating" + (d.count === 1 ? "" : "s"),
         style: {
           flex:       1,
-          height:     Math.max(2, Math.round((d.count / max) * 32)) + "px",
-          background: d.count > 0 ? "var(--ac)" : "rgba(255,255,255,.08)",
+          height:     d.count > 0 ? Math.max(4, Math.round((d.count / max) * 32)) + "px" : "100%",
+          background: d.count > 0 ? "var(--ac)" : "rgba(255,255,255,.05)",
           borderRadius: 2,
           transition: "height .2s",
         },
@@ -1038,7 +1051,14 @@
     const [search,      setSearch]      = useState("");
     const [searchInput, setSearchInput] = useState("");
     const [genres,      setGenres]      = useState([]);
-    const [genre,       setGenre]       = useState(initialGenre || "");
+    // Honour any pending genre stashed by the GenreExplorerWidget. Cleared
+    // immediately so a future fresh mount of /browse doesn't pick up a stale
+    // filter from a long-ago widget click.
+    const [genre,       setGenre]       = useState(() => {
+      const pending = window._gpPendingGenreFilter;
+      if (pending) { window._gpPendingGenreFilter = null; return pending; }
+      return initialGenre || "";
+    });
     const [sort,        setSort]        = useState("newest");
     const searchTimer = useRef(null);
 
@@ -1060,6 +1080,20 @@
     }
 
     useEffect(() => { load(1, sort, genre, search); }, []);
+
+    // Listen for genre filter events from the GenreExplorerWidget. Fired when
+    // the widget is clicked while /browse is already mounted — we update the
+    // dropdown's selection and reload, no navigation required.
+    useEffect(() => {
+      function onGenre(ev) {
+        const g = ev.detail?.genre || "";
+        setGenre(g);
+        setPage(1);
+        load(1, sort, g, search);
+      }
+      window.addEventListener("gp:genre-filter", onGenre);
+      return () => window.removeEventListener("gp:genre-filter", onGenre);
+    }, [sort, search]);
 
     return e("div", { className: "gp-gamelog-page" },
       e("div", { className: "gp-gl-filters" },
@@ -1298,7 +1332,26 @@
               genres.slice(0, 12).map(g => e("button", {
                 key:       g.id,
                 className: "gp-genre-pill",
-                onClick:   () => nav("/ext/" + SLUG + "/browse?genre=" + encodeURIComponent(g.slug)),
+                onClick:   () => {
+                  // Set the genre filter on the browse page. Two cases:
+                  //   - Already on /browse: dispatch an event the page listens
+                  //     for; it updates its dropdown + reloads. No navigation.
+                  //   - On /games/:slug: stash on window, then navigate. The
+                  //     browse page reads and clears the stash on mount.
+                  //
+                  // Query strings can't ride through nav() — Nexus's matchRoute
+                  // doesn't strip the query before matching, so any URL with
+                  // ?foo=bar fails to match and the navigate falls through to
+                  // an empty ext-route with null _match (infinite loading).
+                  // The stash-on-window pattern sidesteps that entirely.
+                  window._gpPendingGenreFilter = g.slug;
+                  window.dispatchEvent(new CustomEvent("gp:genre-filter", {
+                    detail: { genre: g.slug }
+                  }));
+                  if (!window.location.pathname.endsWith("/ext/" + SLUG + "/browse")) {
+                    nav("/ext/" + SLUG + "/browse");
+                  }
+                },
               }, g.name, e("span", { className: "gp-genre-pill-count" }, g.game_count)))
             )
     );
@@ -2049,6 +2102,9 @@
 .gp-detail-summary{font-size:13px;color:var(--t3);line-height:1.6;margin:0 0 16px;}
 .gp-detail-actions{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .gp-detail-hero-rating{margin-bottom:4px;}
+.gp-detail-hero-awards{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px;}
+.gp-detail-hero-award{display:flex;align-items:center;gap:5px;background:rgba(251,191,36,.12);border:0.5px solid rgba(251,191,36,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;color:#fbbf24;}
+.gp-detail-hero-award-year{opacity:.6;margin-left:2px;}
 .gp-detail-section{margin-bottom:28px;padding:0 4px;}
 .gp-detail-section-title{font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;font-weight:500;}
 .gp-detail-screen{width:100%;border-radius:6px;display:block;cursor:pointer;}
