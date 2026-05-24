@@ -494,20 +494,48 @@
     const total  = data.meta?.total || 0;
 
     return e("div", { className: "gp-gamelog-page" },
+      // Stats: Currently playing banner (when set) + 4-card grid with icons.
+      // Field names match backend (Gamepedia.Gamelogs.stats/1):
+      //   stats.total              integer
+      //   stats.added_this_month   integer
+      //   stats.playing            %{id, name, release_year} | nil
+      //   stats.top_genre          %{name, count} | nil
+      //   stats.oldest             %{name, year} | nil
       stats && e("div", { className: "gp-gl-stats" },
-        e("div", { className: "gp-gl-stat" },
-          e("div", { className: "gp-gl-stat-value" }, stats.total_count),
-          e("div", { className: "gp-gl-stat-label" }, "total games")
+        stats.playing && e("div", { className: "gp-gl-stats-playing" },
+          e("i", { className: "fa-solid fa-play", style: { fontSize: 10, color: "var(--ac)" } }),
+          e("span", { className: "gp-gl-stats-playing-label" }, "Currently playing"),
+          e("span", { className: "gp-gl-stats-playing-name" }, stats.playing.name)
         ),
-        e("div", { className: "gp-gl-stat" },
-          e("div", { className: "gp-gl-stat-value" }, stats.month_count),
-          e("div", { className: "gp-gl-stat-label" }, "this month")
-        ),
-        stats.currently_playing && e("div", { className: "gp-gl-stat gp-gl-stat-playing",
-          onClick: () => nav("/ext/" + SLUG + "/games/" + stats.currently_playing.slug),
-          style: { cursor: "pointer" } },
-          e("div", { className: "gp-gl-stat-label" }, "now playing"),
-          e("div", { className: "gp-gl-stat-playing-name" }, stats.currently_playing.name)
+        e("div", { className: "gp-gl-stat-grid" },
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(139,92,246,.12)", color: "var(--ac)" } },
+              e("i", { className: "fa-solid fa-gamepad", style: { fontSize: 13 } })
+            ),
+            e("div", { className: "gp-gl-stat-n" }, stats.total),
+            e("div", { className: "gp-gl-stat-l" }, "Games")
+          ),
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(52,211,153,.12)", color: "#34d399" } },
+              e("i", { className: "fa-solid fa-calendar", style: { fontSize: 13 } })
+            ),
+            e("div", { className: "gp-gl-stat-n" }, stats.added_this_month),
+            e("div", { className: "gp-gl-stat-l" }, "This month")
+          ),
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(96,165,250,.12)", color: "#60a5fa" } },
+              e("i", { className: "fa-solid fa-tags", style: { fontSize: 13 } })
+            ),
+            e("div", { className: "gp-gl-stat-n" }, stats.top_genre ? stats.top_genre.name : "\u2014"),
+            e("div", { className: "gp-gl-stat-l" }, "Top genre")
+          ),
+          e("div", { className: "gp-gl-stat-card" },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(251,191,36,.12)", color: "#fbbf24" } },
+              e("i", { className: "fa-solid fa-clock-rotate-left", style: { fontSize: 13 } })
+            ),
+            e("div", { className: "gp-gl-stat-n" }, stats.oldest ? stats.oldest.name : "\u2014"),
+            e("div", { className: "gp-gl-stat-l" }, stats.oldest ? "Oldest \u00b7 " + stats.oldest.year : "Oldest")
+          )
         )
       ),
       e("div", { className: "gp-gl-filters" },
@@ -577,32 +605,6 @@
               )
             ))
           )
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // GamepediaGamelogLink — profile_sidebar slot component.
-  //
-  // Renders a small "Gamelog" link in the profile page's sidebar. Clicking
-  // it jumps to that profile's Gamelog tab. Per the profile_sidebar slot
-  // contract this component receives ONLY {username, current_user} — the
-  // username is the profile being viewed (not the viewer's). The original
-  // bundle's version had a bug where it navigated to currentUser.username
-  // instead; restored here with the corrected target.
-  // ---------------------------------------------------------------------------
-
-  function GamepediaGamelogLink({ username, current_user }) {
-    function go(ev) {
-      ev.preventDefault();
-      if (username) nav("/profile/" + username + "/gamelog");
-    }
-    return e("a", {
-      href:      "#",
-      onClick:   go,
-      className: "gp-profile-link",
-    },
-      e("i", { className: "fa-solid fa-bookmark", style: { marginRight: 6 } }),
-      "Gamelog"
     );
   }
 
@@ -2040,10 +2042,6 @@
 .gp-psb-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer;transition:background .15s;}
 .gp-psb-dot.active{background:var(--ac);}
 
-/* ── Profile sidebar slot link ── */
-.gp-profile-link{display:flex;align-items:center;padding:6px 10px;font-size:13px;color:var(--t2);text-decoration:none;border-radius:8px;transition:background .12s;}
-.gp-profile-link:hover{background:rgba(255,255,255,.06);color:var(--t1);}
-
 /* ── Now Playing widget ── */
 .gp-now-playing{display:flex;align-items:center;gap:10px;padding:4px 0;}
 .gp-now-playing-cover{width:36px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;}
@@ -2054,12 +2052,16 @@
 
 /* ── Gamelog tab / browse ── */
 .gp-gamelog-page{padding:16px 0;}
-.gp-gl-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
-.gp-gl-stat{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;padding:12px 14px;}
-.gp-gl-stat-value{font-size:18px;font-weight:600;color:var(--t1);}
-.gp-gl-stat-label{font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
-.gp-gl-stat-playing{background:rgba(139,92,246,.06);border-color:rgba(139,92,246,.2);}
-.gp-gl-stat-playing-name{font-size:13px;font-weight:500;color:var(--ac);margin-top:3px;}
+.gp-gl-stats{margin-bottom:16px;}
+.gp-gl-stats-playing{display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(139,92,246,.08);border:0.5px solid rgba(139,92,246,.2);border-radius:10px;margin-bottom:12px;}
+.gp-gl-stats-playing-label{font-size:10px;color:var(--ac);font-weight:500;text-transform:uppercase;letter-spacing:.07em;}
+.gp-gl-stats-playing-name{font-size:13px;color:var(--t1);font-weight:500;}
+.gp-gl-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+@media(max-width:767.99px){.gp-gl-stat-grid{grid-template-columns:repeat(2,1fr);}}
+.gp-gl-stat-card{background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px;}
+.gp-gl-stat-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+.gp-gl-stat-n{font-size:16px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-gl-stat-l{font-size:11px;color:var(--t4);margin-top:2px;}
 .gp-gl-filters{display:flex;gap:8px;margin-bottom:12px;align-items:center;}
 .gp-gl-count{font-size:12px;color:var(--t4);margin-bottom:10px;}
 .gp-gl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
@@ -2250,15 +2252,6 @@
     slug:      SLUG,
     id:        "gamelog",
     component: GamelogTab,
-  });
-
-  // Profile sidebar slot (manifest.slots) — small "Gamelog" link in the
-  // left rail of /profile/:username. Receives {username, current_user}.
-  NE.registerSlot({
-    slug:      SLUG,
-    slot:      "profile_sidebar",
-    component: GamepediaGamelogLink,
-    priority:  50,
   });
 
   // Admin panel (manifest.admin_panel)
