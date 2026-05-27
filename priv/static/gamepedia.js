@@ -544,7 +544,6 @@
           type:        "text",
           placeholder: "Search gamelog\u2026",
           value:       searchInput,
-          style:       { flex: 1 },
           onChange:    ev => {
             setSearchInput(ev.target.value);
             clearTimeout(searchTimer.current);
@@ -1104,7 +1103,6 @@
           type:        "text",
           placeholder: "Search games\u2026",
           value:       searchInput,
-          style:       { flex: 1 },
           onChange:    ev => {
             setSearchInput(ev.target.value);
             clearTimeout(searchTimer.current);
@@ -2063,6 +2061,7 @@
 .gp-gl-stat-n{font-size:16px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gp-gl-stat-l{font-size:11px;color:var(--t4);margin-top:2px;}
 .gp-gl-filters{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;}
+.gp-gl-filters > .gp-input{flex:1;}
 @media(max-width:767.99px){
   .gp-gl-filters > .gp-input{flex:1 1 100%;}
   .gp-gl-filters > .gp-dropdown{flex:1;min-width:0;}
