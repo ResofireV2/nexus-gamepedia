@@ -16,6 +16,7 @@ defmodule Gamepedia.PostGameController do
   use Phoenix.Controller, formats: [:json]
   import Gamepedia.ControllerHelpers
   alias Gamepedia.PostGames
+  alias Gamepedia.Games
 
   # GET /posts/:post_id/games — list games linked to a post
   def index(conn, %{"post_id" => post_id}) do
@@ -29,14 +30,22 @@ defmodule Gamepedia.PostGameController do
   end
 
   defp game_json(g) do
+    first_screenshot = List.first(g.screenshots)
+
     %{
-      id:              g.id,
-      name:            g.name,
-      slug:            g.slug,
-      cover_image_url: g.cover_image_url,
-      release_year:    release_year(g.first_release_date),
-      developer:       g.developer,
-      publisher:       g.publisher,
+      id:                   g.id,
+      name:                 g.name,
+      slug:                 g.slug,
+      cover_image_url:      g.cover_image_url,
+      release_year:         release_year(g.first_release_date),
+      developer:            g.developer,
+      publisher:            g.publisher,
+      first_screenshot_url: screenshot_url(first_screenshot),
     }
+  end
+
+  defp screenshot_url(nil), do: nil
+  defp screenshot_url(s) do
+    Games.screenshot_url(s.webp_path) || s.url
   end
 end

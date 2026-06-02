@@ -1937,6 +1937,75 @@
   // ---------------------------------------------------------------------------
 
   const style = document.createElement("style");
+
+  // ---------------------------------------------------------------------------
+  // PostFooterGameCard — post_footer slot component.
+  // Receives { post_id } from Nexus. Renders a hero-style panel for each game
+  // linked to the post: screenshot background, cover art, title, developer ·
+  // publisher · year. Clicking navigates to the game detail page.
+  // No auth required — gamelog actions remain in the right sidebar widget.
+  // ---------------------------------------------------------------------------
+
+  function PostFooterGameCard({ post_id }) {
+    const [games,     setGames]     = useState([]);
+    const [activeIdx, setActiveIdx] = useState(0);
+
+    useEffect(() => {
+      if (!post_id) return;
+      apiFetch("/posts/" + post_id + "/games")
+        .then(r => setGames(r.data || []))
+        .catch(() => {});
+    }, [post_id]);
+
+    if (games.length === 0) return null;
+
+    const game = games[activeIdx] || games[0];
+
+    const meta = [game.developer, game.publisher, game.release_year]
+      .filter(Boolean).join(" \u00b7 ");
+
+    return e("div", { className: "gp-post-footer" },
+      // Tab strip — only shown when more than one game is linked
+      games.length > 1 && e("div", { className: "gp-post-footer-tabs" },
+        games.map((g, i) =>
+          e("button", {
+            key:       g.id,
+            className: "gp-post-footer-tab" + (i === activeIdx ? " gp-post-footer-tab-active" : ""),
+            onClick:   () => setActiveIdx(i),
+          }, g.name)
+        )
+      ),
+      // Hero panel
+      e("a", {
+        className: "gp-post-footer-hero",
+        href:      "/ext/" + SLUG + "/games/" + game.slug,
+        onClick:   e => { e.preventDefault(); NE.navigate("/ext/" + SLUG + "/games/" + game.slug); },
+      },
+        // Background screenshot
+        game.first_screenshot_url
+          ? e("img", { src: game.first_screenshot_url, alt: "", className: "gp-post-footer-bg" })
+          : null,
+        e("div", { className: "gp-post-footer-overlay" }),
+        e("div", { className: "gp-post-footer-content" },
+          // Cover art
+          game.cover_image_url
+            ? e("img", { src: game.cover_image_url, alt: game.name, className: "gp-post-footer-cover" })
+            : e("div", { className: "gp-post-footer-cover gp-post-footer-cover-empty" },
+                e("i", { className: "fa-solid fa-gamepad" })),
+          // Info
+          e("div", { className: "gp-post-footer-info" },
+            e("div", { className: "gp-post-footer-title" }, game.name),
+            meta && e("div", { className: "gp-post-footer-meta" }, meta),
+            e("div", { className: "gp-post-footer-cta" },
+              e("i", { className: "fa-solid fa-arrow-right", style: { marginRight: 6, fontSize: 11 } }),
+              "View in Gamepedia"
+            )
+          )
+        )
+      )
+    );
+  }
+
   style.textContent = `
 /* ── Shared ── */
 .gp-loading{text-align:center;padding:32px 0;color:var(--t5);font-size:13px;}
@@ -2181,6 +2250,23 @@
 .gp-stats-top-list{padding-left:18px;}
 .gp-stats-top-list li{display:flex;justify-content:space-between;font-size:13px;color:var(--t2);padding:3px 0;}
 .gp-stats-count{color:var(--t4);font-size:12px;}
+
+/* ── Post footer slot ──────────────────────────────────────────────────────── */
+.gp-post-footer{margin-top:20px;}
+.gp-post-footer-tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+.gp-post-footer-tab{background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:20px;padding:4px 14px;font-size:12px;color:var(--t3);cursor:pointer;transition:background .15s,color .15s;}
+.gp-post-footer-tab:hover{background:rgba(255,255,255,.1);color:var(--t1);}
+.gp-post-footer-tab-active{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:var(--t1);font-weight:500;}
+.gp-post-footer-hero{position:relative;display:block;border-radius:12px;overflow:hidden;min-height:140px;text-decoration:none;cursor:pointer;}
+.gp-post-footer-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(2px) brightness(.45);}
+.gp-post-footer-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(13,13,20,.85) 0%,rgba(13,13,20,.5) 100%);}
+.gp-post-footer-content{position:relative;display:flex;gap:20px;padding:20px 24px;align-items:center;}
+.gp-post-footer-cover{width:72px;height:96px;border-radius:6px;object-fit:cover;flex-shrink:0;box-shadow:0 4px 16px rgba(0,0,0,.5);}
+.gp-post-footer-cover-empty{background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:var(--t4);font-size:24px;}
+.gp-post-footer-info{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.gp-post-footer-title{font-size:18px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-post-footer-meta{font-size:12px;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gp-post-footer-cta{font-size:12px;color:var(--ac);font-weight:500;margin-top:4px;}
 `;
   document.head.appendChild(style);
 
@@ -2241,6 +2327,10 @@
     scope:     { path: ["/browse", "/games/:slug"] },
     priority:  53,
   });
+
+
+  // Post footer slot (manifest.slots)
+  NE.registerSlot({ slug: SLUG, slot: "post_footer", component: PostFooterGameCard, priority: 50 });
 
   // Toolbar button (manifest.toolbar_buttons)
   NE.registerToolbarButton({

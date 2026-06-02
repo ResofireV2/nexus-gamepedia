@@ -56,12 +56,19 @@ defmodule Gamepedia.PostGames do
   # ---------------------------------------------------------------------------
 
   def list_games_for_post(post_id) do
-    from(g in Game,
-      join: pg in @post_game_table, on: pg.game_id == g.id,
-      where: pg.post_id == ^post_id,
-      order_by: [asc: g.name]
-    )
-    |> Repo.all()
+    alias Gamepedia.Games.Screenshot
+
+    games =
+      from(g in Game,
+        join: pg in @post_game_table, on: pg.game_id == g.id,
+        where: pg.post_id == ^post_id,
+        order_by: [asc: g.name]
+      )
+      |> Repo.all()
+
+    # Preload only the first screenshot per game (ordered by :order) to avoid
+    # fetching the full screenshot list for what is a single background image.
+    Repo.preload(games, screenshots: from(s in Screenshot, order_by: [asc: s.order], limit: 1))
   end
 
   # ---------------------------------------------------------------------------
