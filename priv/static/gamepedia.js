@@ -2252,7 +2252,7 @@
 .gp-stats-count{color:var(--t4);font-size:12px;}
 
 /* ── Post footer slot ──────────────────────────────────────────────────────── */
-.gp-post-footer{margin-top:20px;}
+.gp-post-footer{margin-top:20px;}@media(min-width:1240px){.gp-post-footer{display:none!important;}}
 .gp-post-footer-tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
 .gp-post-footer-tab{background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:20px;padding:4px 14px;font-size:12px;color:var(--t3);cursor:pointer;transition:background .15s,color .15s;}
 .gp-post-footer-tab:hover{background:rgba(255,255,255,.1);color:var(--t1);}
