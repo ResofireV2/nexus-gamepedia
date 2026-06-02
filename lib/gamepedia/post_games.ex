@@ -66,9 +66,11 @@ defmodule Gamepedia.PostGames do
       )
       |> Repo.all()
 
-    # Preload only the first screenshot per game (ordered by :order) to avoid
-    # fetching the full screenshot list for what is a single background image.
-    Repo.preload(games, screenshots: from(s in Screenshot, order_by: [asc: s.order], limit: 1))
+    # Preload genres and only the first screenshot per game.
+    # The screenshot limit avoids fetching the full list for a single bg image.
+    games
+    |> Repo.preload(:genres)
+    |> Repo.preload(screenshots: from(s in Screenshot, order_by: [asc: s.order], limit: 1))
   end
 
   # ---------------------------------------------------------------------------

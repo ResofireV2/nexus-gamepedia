@@ -17,6 +17,8 @@ defmodule Gamepedia.PostGameController do
   import Gamepedia.ControllerHelpers
   alias Gamepedia.PostGames
   alias Gamepedia.Games
+  alias Gamepedia.Awards
+  alias Gamepedia.Ratings
 
   # GET /posts/:post_id/games — list games linked to a post
   def index(conn, %{"post_id" => post_id}) do
@@ -31,6 +33,10 @@ defmodule Gamepedia.PostGameController do
 
   defp game_json(g) do
     first_screenshot = List.first(g.screenshots)
+    rating_summary   = Ratings.summary(g.id)
+    awards           = Awards.list_for_game(g.id)
+    gamelog_count    = Games.gamelog_count(g.id)
+    thread_count     = PostGames.thread_count(g.id)
 
     %{
       id:                   g.id,
@@ -40,7 +46,13 @@ defmodule Gamepedia.PostGameController do
       release_year:         release_year(g.first_release_date),
       developer:            g.developer,
       publisher:            g.publisher,
+      genres:               Enum.map(g.genres, fn genre -> %{id: genre.id, name: genre.name} end),
       first_screenshot_url: screenshot_url(first_screenshot),
+      rating_avg:           rating_summary.avg,
+      rating_count:         rating_summary.count,
+      awards:               awards,
+      gamelog_count:        gamelog_count,
+      thread_count:         thread_count,
     }
   end
 

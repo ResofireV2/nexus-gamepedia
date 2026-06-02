@@ -240,12 +240,11 @@
 
   function PostSidebarGameCard({ currentUser, pageProps }) {
     const postId = pageProps?.id;
-    const [games,       setGames]       = useState([]);
-    const [gameDetails, setGameDetails] = useState({});
-    const [gamelogIds,  setGamelogIds]  = useState({});
-    const [logBusy,     setLogBusy]     = useState({});
-    const [activeIdx,   setActiveIdx]   = useState(0);
-    const [progress,    setProgress]    = useState(0);
+    const [games,      setGames]      = useState([]);
+    const [gamelogIds, setGamelogIds] = useState({});
+    const [logBusy,    setLogBusy]    = useState({});
+    const [activeIdx,  setActiveIdx]  = useState(0);
+    const [progress,   setProgress]   = useState(0);
     const startRef = useRef(null);
     const rafRef   = useRef(null);
 
@@ -253,17 +252,12 @@
 
     useEffect(() => {
       if (!postId) return;
-      setGames([]); setGameDetails({}); setGamelogIds({}); setActiveIdx(0); setProgress(0);
+      setGames([]); setGamelogIds({}); setActiveIdx(0); setProgress(0);
 
       apiFetch("/posts/" + postId + "/games")
         .then(r => {
           const list = r.data || [];
           setGames(list);
-          list.forEach(g => {
-            apiFetch("/games/" + g.slug)
-              .then(gr => { if (gr.data) setGameDetails(p => ({ ...p, [g.id]: gr.data })); })
-              .catch(() => setGameDetails(p => ({ ...p, [g.id]: g })));
-          });
           if (currentUser?.id && list.length > 0) {
             apiFetch("/gamelog/" + currentUser.id)
               .then(gr => {
@@ -322,8 +316,7 @@
     }
 
     if (games.length === 0) return null;
-    const stub = games[activeIdx] || games[0];
-    const game = gameDetails[stub.id] || stub;
+    const game = games[activeIdx] || games[0];
     const inGamelog = !!gamelogIds[game.id];
     const awards = game.awards || [];
 
