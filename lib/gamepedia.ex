@@ -16,50 +16,28 @@ defmodule Gamepedia do
   # Migrations — run by Nexus on install/update, rolled back on uninstall
   # ---------------------------------------------------------------------------
 
-  # Migration version numbers + idempotence — IMPORTANT
+  # Migration naming
   #
-  # Nexus's loader calls `Ecto.Migrator.up/3` for every migration module on
-  # every boot via `Extensions.load_all_enabled/0`. That's normally a no-op
-  # because `Ecto.Migrator` skips versions already recorded in
-  # `schema_migrations`. But two failure modes can desync versions from
-  # actual table state:
+  # Use simple sequential names: V1, V2, V3, etc. Nexus derives a
+  # collision-free schema_migrations version integer by hashing the string
+  # "gamepedia:N", producing a 10-digit value that never collides with
+  # Nexus core's 14-digit timestamp migrations or another extension's V1.
   #
-  #   1. Version collision: `schema_migrations` is SHARED across Nexus core
-  #      and every installed extension. If our version integer collides with
-  #      a Nexus core migration that already ran, Ecto silently skips us and
-  #      our table never gets created. We avoid this by prefixing versions
-  #      with `20260523...` — above Nexus core's `20260501...20260521` range.
-  #
-  #   2. Version rename across releases: if an earlier Gamepedia release
-  #      used different version numbers (we did — pre-hotfix versions were
-  #      `20260501000001...20260510000001`), the database has the OLD
-  #      versions recorded but the tables they created persist. When we
-  #      install with NEW version numbers, every boot retries them, and
-  #      every retry fails because the tables already exist. The user sees
-  #      `relation "gamepedia_games" already exists` on a fresh boot with
-  #      no install or update event.
-  #
-  # The defence against both is the same: write idempotent migrations.
-  # `create_if_not_exists table/index` and `add_if_not_exists` column let
-  # the migration succeed (and record its version) regardless of whether
-  # the schema changes are already in place. After one successful boot the
-  # new versions are recorded; future boots skip cleanly.
-  #
-  # If you add new migrations, keep them above Nexus core's latest version
-  # AND use the `_if_not_exists` variants for every DDL operation. Don't
-  # reset the date prefix.
+  # Write idempotent migrations: use create_if_not_exists for tables and
+  # indexes, add_if_not_exists for columns. When adding migrations, just
+  # increment: V10, V11, V12, ...
   @impl true
   def migrations do
     [
-      Gamepedia.Migrations.V20260523000001CreateGenres,
-      Gamepedia.Migrations.V20260523000002CreateGames,
-      Gamepedia.Migrations.V20260523000003CreateScreenshots,
-      Gamepedia.Migrations.V20260523000004CreateGameGenre,
-      Gamepedia.Migrations.V20260523000005CreatePostGame,
-      Gamepedia.Migrations.V20260523000006CreateAwards,
-      Gamepedia.Migrations.V20260523000007CreateGamelogs,
-      Gamepedia.Migrations.V20260523000008CreateRatings,
-      Gamepedia.Migrations.V20260523000009AddLocalPathsToScreenshots,
+      Gamepedia.Migrations.V1CreateGenres,
+      Gamepedia.Migrations.V2CreateGames,
+      Gamepedia.Migrations.V3CreateScreenshots,
+      Gamepedia.Migrations.V4CreateGameGenre,
+      Gamepedia.Migrations.V5CreatePostGame,
+      Gamepedia.Migrations.V6CreateAwards,
+      Gamepedia.Migrations.V7CreateGamelogs,
+      Gamepedia.Migrations.V8CreateRatings,
+      Gamepedia.Migrations.V9AddLocalPathsToScreenshots,
     ]
   end
 
