@@ -185,7 +185,7 @@
           ev.preventDefault();
           if (atMax) return;
           if (isSelected) selected.delete(game.id);
-          else            selected.set(game.id, { id: game.id, name: game.name, slug: game.slug });
+          else            selected.set(game.id, { id: game.id, name: game.name, slug: game.slug, cover_image_url: game.cover_image_url ?? null });
           renderSelected();
           renderResults(lastResults);
         });
@@ -1999,6 +1999,46 @@
     );
   }
 
+
+  // ---------------------------------------------------------------------------
+  // ComposeAttachmentsPanel — compose_attachments slot component.
+  // Receives { attachments, setAttachments } from Nexus. Filters to
+  // kind === "game_link" and renders removable chips for each linked game.
+  // The remove button calls setAttachments to drop that item before posting.
+  // ---------------------------------------------------------------------------
+
+  function ComposeAttachmentsPanel({ attachments, setAttachments }) {
+    const linked = (attachments || []).filter(a => a.kind === "game_link");
+    if (linked.length === 0) return null;
+
+    function remove(game_id) {
+      setAttachments(prev => prev.filter(a => !(a.kind === "game_link" && a.data.game_id === game_id)));
+    }
+
+    return e("div", { className: "gp-compose-attachments" },
+      e("div", { className: "gp-compose-attachments-label" },
+        e("i", { className: "fa-solid fa-gamepad", style: { marginRight: 6 } }),
+        linked.length === 1 ? "Linked game" : "Linked games"
+      ),
+      e("div", { className: "gp-compose-attachments-list" },
+        linked.map(a =>
+          e("div", { key: a.data.game_id, className: "gp-compose-chip" },
+            a.data.cover_image_url
+              ? e("img", { src: a.data.cover_image_url, alt: a.data.name, className: "gp-compose-chip-cover" })
+              : e("div", { className: "gp-compose-chip-cover gp-compose-chip-cover-empty" },
+                  e("i", { className: "fa-solid fa-gamepad" })),
+            e("span", { className: "gp-compose-chip-name" }, a.data.name || "Game #" + a.data.game_id),
+            e("button", {
+              className: "gp-compose-chip-remove",
+              title:     "Remove",
+              onClick:   () => remove(a.data.game_id),
+            }, "\u2715")
+          )
+        )
+      )
+    );
+  }
+
   style.textContent = `
 /* ── Shared ── */
 .gp-loading{text-align:center;padding:32px 0;color:var(--t5);font-size:13px;}
@@ -2260,6 +2300,17 @@
 .gp-post-footer-title{font-size:18px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gp-post-footer-meta{font-size:12px;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gp-post-footer-cta{font-size:12px;color:var(--ac);font-weight:500;margin-top:4px;}
+
+/* ── Compose attachments slot ──────────────────────────────────────────────── */
+.gp-compose-attachments{padding:12px 0 4px;}
+.gp-compose-attachments-label{font-size:11px;font-weight:600;color:var(--t4);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;}
+.gp-compose-attachments-list{display:flex;flex-wrap:wrap;gap:8px;}
+.gp-compose-chip{display:flex;align-items:center;gap:8px;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;padding:6px 10px 6px 6px;max-width:280px;}
+.gp-compose-chip-cover{width:32px;height:42px;border-radius:4px;object-fit:cover;flex-shrink:0;}
+.gp-compose-chip-cover-empty{background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:var(--t4);font-size:14px;}
+.gp-compose-chip-name{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
+.gp-compose-chip-remove{background:none;border:none;color:var(--t4);cursor:pointer;font-size:12px;padding:0 0 0 4px;line-height:1;flex-shrink:0;}
+.gp-compose-chip-remove:hover{color:var(--t1);}
 `;
   document.head.appendChild(style);
 
@@ -2323,7 +2374,8 @@
 
 
   // Post footer slot (manifest.slots)
-  NE.registerSlot({ slug: SLUG, slot: "post_footer", component: PostFooterGameCard, priority: 50 });
+  NE.registerSlot({ slug: SLUG, slot: "post_footer",          component: PostFooterGameCard,      priority: 50 });
+  NE.registerSlot({ slug: SLUG, slot: "compose_attachments",  component: ComposeAttachmentsPanel, priority: 50 });
 
   // Toolbar button (manifest.toolbar_buttons)
   NE.registerToolbarButton({
@@ -2337,7 +2389,7 @@
       openGamePickerModal({
         max: getMaxLinkedGames(),
         onConfirm(games) {
-          games.forEach(g => attach({ kind: "game_link", data: { game_id: g.id } }));
+          games.forEach(g => attach({ kind: "game_link", data: { game_id: g.id, name: g.name, cover_image_url: g.cover_image_url ?? null } }));
         },
       });
     },
