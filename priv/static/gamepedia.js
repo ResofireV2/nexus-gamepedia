@@ -23,10 +23,9 @@
 
   const React = window.React;
   const NE    = window.NexusExtensions;
-  const NET   = window.NexusExtensionTemplates;
 
-  if (!React || !NE || !NET) {
-    console.warn("[Gamepedia] React / NexusExtensions / NexusExtensionTemplates not available.");
+  if (!React || !NE) {
+    console.warn("[Gamepedia] React or NexusExtensions not available.");
     return;
   }
 
@@ -35,7 +34,6 @@
 
   const SLUG = "gamepedia";
   const BASE = "/ext/" + SLUG + "/api";
-  const { SimpleSettingsPanel, TabbedPanel } = NET;
 
   // ---------------------------------------------------------------------------
   // HTTP helpers
@@ -1363,6 +1361,7 @@
   // ---------------------------------------------------------------------------
 
   function GamepediaAdminPanel() {
+    const { SimpleSettingsPanel, TabbedPanel } = window.NexusExtensionTemplates;
     return e(TabbedPanel, {
       tabs: [
         { key: "games",  label: "Games",  icon: "fa-gamepad",
