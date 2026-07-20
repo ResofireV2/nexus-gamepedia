@@ -47,12 +47,32 @@
     };
   }
 
+  // Rejects on a non-2xx response, using the server's own error message when
+  // the body carries one. The previous version called r.json() regardless of
+  // status, so a 401/403/500 resolved successfully and callers fell through
+  // to `r.data || []` and rendered an empty state — every carefully worded
+  // error the controllers return was discarded before anyone saw it.
   function apiFetch(path, opts = {}) {
     return fetch(BASE + path, {
       ...opts,
       headers: { ...authHeaders(), ...(opts.headers || {}) },
       body:    opts.body ? JSON.stringify(opts.body) : undefined,
-    }).then(r => r.json());
+    }).then(async r => {
+      let payload = null;
+      try {
+        payload = await r.json();
+      } catch (_) {
+        // Non-JSON body (a proxy error page, an empty 204). Fall through to
+        // the status-based message below rather than throwing a parse error.
+      }
+      if (!r.ok) {
+        const err = new Error(payload?.error || `Request failed (${r.status})`);
+        err.status = r.status;
+        err.payload = payload;
+        throw err;
+      }
+      return payload ?? {};
+    });
   }
 
   // Navigation helper that hits the documented URL form.
@@ -60,11 +80,32 @@
     window.NexusExtensions.navigate(url);
   }
 
-  // Read a Gamepedia client-side setting injected via window._gp* by the admin
-  // panel. These are convenience caches; the values are still authoritative
-  // on the server. Defaults match the admin panel's SimpleSettingsPanel defaults.
+  // UI-affecting settings, cached on window after a single fetch. The values
+  // are still authoritative on the server; these only shape presentation.
+  // Defaults match the admin panel's SimpleSettingsPanel defaults.
   function getMaxLinkedGames()   { return window._gpMaxLinkedGames   || 3; }
   function getSlideshowSeconds() { return window._gpSlideshowSeconds || 5; }
+
+  // Fetches /config at most once, and only when a Gamepedia surface actually
+  // mounts. This used to run unconditionally at bundle load, which put an
+  // extra request on every page view across the whole forum — including the
+  // vast majority that render no Gamepedia UI at all. Callers invoke this
+  // from an effect; the getters above stay synchronous and fall back to the
+  // defaults until it resolves.
+  let configPromise = null;
+  function ensureConfig() {
+    if (configPromise) return configPromise;
+    configPromise = apiFetch("/config")
+      .then(r => {
+        const cfg = r?.data;
+        if (cfg) {
+          if (typeof cfg.max_linked_games === "number")  window._gpMaxLinkedGames   = cfg.max_linked_games;
+          if (typeof cfg.slideshow_seconds === "number") window._gpSlideshowSeconds = cfg.slideshow_seconds;
+        }
+      })
+      .catch(() => { /* fall back to the defaults inside the getters */ });
+    return configPromise;
+  }
 
   // ---------------------------------------------------------------------------
   // Game picker modal — opened from the composer toolbar button.
@@ -248,8 +289,12 @@
 
     const interval = getSlideshowSeconds() * 1000;
 
+    // Depends on currentUser as well as postId: the viewer often resolves
+    // after first paint, and the previous [postId]-only dependency meant the
+    // in-gamelog markers never populated for those renders.
     useEffect(() => {
       if (!postId) return;
+      ensureConfig();
       setGames([]); setGamelogIds({}); setActiveIdx(0); setProgress(0);
 
       apiFetch("/posts/" + postId + "/games")
@@ -257,17 +302,18 @@
           const list = r.data || [];
           setGames(list);
           if (currentUser?.id && list.length > 0) {
-            apiFetch("/gamelog/" + currentUser.id)
-              .then(gr => {
-                const map = {};
-                (gr.data || []).forEach(x => { map[x.id] = true; });
-                setGamelogIds(map);
-              })
+            // Ask specifically about these games. This used to fetch page one
+            // of the viewer's whole gamelog and test membership against it —
+            // that listing is paginated at 16, so any game outside the first
+            // page incorrectly showed as not added.
+            const ids = list.map(g => g.id).join(",");
+            apiFetch("/gamelog/check?game_ids=" + encodeURIComponent(ids))
+              .then(gr => setGamelogIds(gr.data || {}))
               .catch(() => {});
           }
         })
         .catch(() => {});
-    }, [postId]);
+    }, [postId, currentUser?.id]);
 
     // Slideshow loop using requestAnimationFrame for smooth progress.
     useEffect(() => {
@@ -451,11 +497,12 @@
       if (q) params.set("search", q);
       apiFetch("/users/" + encodeURIComponent(username) + "/gamelog?" + params)
         .then(r => {
-          if (r.error) { setError(r.error); setLoading(false); return; }
           setData(r);
           setLoading(false);
         })
-        .catch(() => { setError("Failed to load gamelog."); setLoading(false); });
+        // apiFetch rejects on a non-2xx response, so the server's message
+        // arrives here rather than as r.error on a resolved body.
+        .catch(err => { setError(err.message || "Failed to load gamelog."); setLoading(false); });
     }
 
     useEffect(() => { load(1, sort, genre, search); }, [username]);
@@ -609,10 +656,13 @@
 
     useEffect(() => {
       if (!currentUser?.id) { setLoading(false); return; }
-      apiFetch("/gamelog/" + currentUser.id + "?sort=newest&page=1")
+      // Reads stats.playing, which the server resolves with a direct
+      // is_playing lookup. Scanning page one of the listing for is_playing
+      // silently failed once a user's gamelog grew past 16 entries and the
+      // game they were playing fell off the first page.
+      apiFetch("/gamelog/" + currentUser.id + "?page=1")
         .then(r => {
-          const playing = (r.data || []).find(g => g.is_playing) || null;
-          setGame(playing);
+          setGame(r.stats?.playing || null);
           setLoading(false);
         })
         .catch(() => setLoading(false));
@@ -676,7 +726,6 @@
 
       apiFetch("/games/" + encodeURIComponent(slug))
         .then(r => {
-          if (r.error) { setError(r.error); setLoading(false); return; }
           const g = r.data;
           setGame(g);
           setLoading(false);
@@ -700,10 +749,13 @@
           }
 
           if (currentUser?.id && g.id) {
-            apiFetch("/gamelog/" + currentUser.id)
+            // Asks about this one game rather than paging the viewer's whole
+            // gamelog and searching it — the listing is capped at 16 per page,
+            // so this previously reported "not added" for anyone whose log had
+            // grown past the first page.
+            apiFetch("/gamelog/check?game_ids=" + g.id)
               .then(gr => {
-                const entry = (gr.data || []).find(x => x.id === g.id);
-                if (entry) { setInGamelog(true); setIsPlaying(entry.is_playing); }
+                if (gr.data && gr.data[String(g.id)]) setInGamelog(true);
               })
               .catch(() => {});
           }
@@ -1399,7 +1451,7 @@
               { key: "igdb_client_id",     label: "IGDB Client ID",     type: "string",
                 hint: "From dev.twitch.tv — the Client ID for your Twitch application." },
               { key: "igdb_client_secret", label: "IGDB Client Secret", type: "string", secret: true,
-                hint: "From dev.twitch.tv — the Client Secret. Stored encrypted." },
+                hint: "From dev.twitch.tv — the Client Secret. Stored on this server and never sent to browsers." },
             ],
           }) },
       ],
@@ -1694,20 +1746,18 @@
         .then(r => {
           setLoading(false);
           setResults(r.data || []);
-          if (r.error) setError(r.error);
         })
-        .catch(() => { setLoading(false); setError("Search failed."); });
+        .catch(err => { setLoading(false); setError(err.message || "Search failed."); });
     }
 
     function addGame(game) {
       setAdding(p => ({ ...p, [game.igdb_id]: true }));
       apiFetch("/admin/games/import", { method: "POST", body: { igdb_id: game.igdb_id } })
-        .then(r => {
-          if (r.error) { setError(r.error); return; }
+        .then(() => {
           setAdded(p => ({ ...p, [game.igdb_id]: true }));
           onGameAdded();
         })
-        .catch(() => setError("Failed to add game."))
+        .catch(err => setError(err.message || "Failed to add game."))
         .finally(() => setAdding(p => ({ ...p, [game.igdb_id]: false })));
     }
 
@@ -2043,18 +2093,18 @@
 .gp-loading{text-align:center;padding:32px 0;color:var(--t5);font-size:13px;}
 .gp-empty{text-align:center;padding:32px 0;color:var(--t4);font-size:13px;}
 .gp-error{color:var(--red);font-size:13px;padding:12px 0;}
-.gp-input{padding:7px 10px;background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:8px;color:var(--t1);font-size:13px;outline:none;font-family:inherit;}
+.gp-input{padding:7px 10px;background:var(--s1);border:0.5px solid var(--b2);border-radius:8px;color:var(--t1);font-size:13px;outline:none;font-family:inherit;}
 .gp-input::placeholder{color:var(--t4);}
 .gp-input:focus{border-color:var(--ac-border);}
-.gp-btn{background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:8px;color:var(--t2);cursor:pointer;font-size:13px;padding:7px 16px;font-family:inherit;transition:background .12s;}
-.gp-btn:hover{background:rgba(255,255,255,.13);}
+.gp-btn{background:var(--s2);border:0.5px solid var(--b3);border-radius:8px;color:var(--t2);cursor:pointer;font-size:13px;padding:7px 16px;font-family:inherit;transition:background .12s;}
+.gp-btn:hover{background:var(--s3);}
 .gp-btn:disabled{opacity:.5;cursor:not-allowed;}
 .gp-btn-active{background:var(--ac-bg);border-color:var(--ac-border);color:var(--ac);}
 .gp-btn-primary{background:var(--ac);border:0.5px solid var(--ac);border-radius:8px;color:#fff;cursor:pointer;font-size:13px;padding:7px 16px;font-family:inherit;transition:opacity .12s;}
 .gp-btn-primary:hover{opacity:.9;}
 .gp-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
-.gp-btn-sm{background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:6px;color:var(--t2);cursor:pointer;font-size:11px;padding:5px 9px;font-family:inherit;transition:background .12s;display:inline-flex;align-items:center;gap:5px;}
-.gp-btn-sm:hover{background:rgba(255,255,255,.13);}
+.gp-btn-sm{background:var(--s2);border:0.5px solid var(--b3);border-radius:6px;color:var(--t2);cursor:pointer;font-size:11px;padding:5px 9px;font-family:inherit;transition:background .12s;display:inline-flex;align-items:center;gap:5px;}
+.gp-btn-sm:hover{background:var(--s3);}
 .gp-btn-sm:disabled{opacity:.5;cursor:not-allowed;}
 .gp-btn-danger{color:var(--red);border-color:rgba(248,113,113,.3);}
 .gp-btn-danger:hover{background:rgba(248,113,113,.1);}
@@ -2066,45 +2116,45 @@
 .gp-modal-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:0.5px solid var(--b1);margin-bottom:8px;}
 .gp-modal-title{font-size:14px;font-weight:500;color:var(--t1);}
 .gp-modal-close{background:none;border:none;color:var(--t4);font-size:16px;cursor:pointer;line-height:1;padding:0 4px;}
-.gp-modal-search{padding:9px 12px;background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:8px;color:var(--t1);font-size:13px;outline:none;font-family:inherit;margin-bottom:10px;width:100%;box-sizing:border-box;}
+.gp-modal-search{padding:9px 12px;background:var(--s1);border:0.5px solid var(--b2);border-radius:8px;color:var(--t1);font-size:13px;outline:none;font-family:inherit;margin-bottom:10px;width:100%;box-sizing:border-box;}
 .gp-modal-search:focus{border-color:var(--ac-border);}
 .gp-modal-results{overflow-y:auto;flex:1;min-height:200px;}
 .gp-modal-loading{text-align:center;padding:24px 0;color:var(--t5);font-size:13px;}
 .gp-modal-empty{text-align:center;padding:24px 0;color:var(--t4);font-size:13px;}
-.gp-modal-error{background:rgba(248,113,113,.12);color:#fca5a5;border:0.5px solid rgba(248,113,113,.3);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px;}
+.gp-modal-error{background:rgba(248,113,113,.12);color:var(--red);border:0.5px solid rgba(248,113,113,.3);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px;}
 .gp-modal-selected{display:flex;flex-wrap:wrap;gap:6px;padding:6px 0 10px;border-bottom:0.5px solid var(--b1);margin-bottom:8px;}
 .gp-modal-selected-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:3px 4px 3px 10px;border-radius:14px;background:var(--ac-bg);color:var(--ac);}
-.gp-modal-selected-x{cursor:pointer;font-size:10px;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.06);}
-.gp-modal-selected-x:hover{background:rgba(255,255,255,.13);}
+.gp-modal-selected-x{cursor:pointer;font-size:10px;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--s1);}
+.gp-modal-selected-x:hover{background:var(--s3);}
 .gp-modal-footer{display:flex;justify-content:flex-end;padding-top:10px;border-top:0.5px solid var(--b1);margin-top:8px;}
 
 /* Result rows */
 .gp-result-row{display:flex;align-items:center;gap:10px;padding:8px;width:100%;background:none;border:0.5px solid transparent;border-radius:8px;cursor:pointer;text-align:left;color:var(--t1);font-family:inherit;}
-.gp-result-row:hover{background:rgba(255,255,255,.04);}
+.gp-result-row:hover{background:var(--s1);}
 .gp-result-row.is-linked{border-color:var(--ac-border);background:var(--ac-bg);}
 .gp-result-row.is-disabled{opacity:.4;cursor:not-allowed;}
 .gp-result-cover{width:32px;height:42px;object-fit:cover;border-radius:4px;flex-shrink:0;}
-.gp-result-nocover{width:32px;height:42px;background:rgba(255,255,255,.06);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--t5);flex-shrink:0;}
+.gp-result-nocover{width:32px;height:42px;background:var(--s1);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--t5);flex-shrink:0;}
 .gp-result-info{flex:1;min-width:0;}
 .gp-result-name{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gp-result-year{font-size:11px;color:var(--t4);}
 .gp-result-linked{font-size:11px;color:var(--ac);}
 
 /* Import rows */
-.gp-import-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,.04);}
+.gp-import-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--b1);}
 .gp-import-cover{width:36px;height:48px;object-fit:cover;border-radius:4px;flex-shrink:0;}
-.gp-import-nocover{width:36px;height:48px;background:rgba(255,255,255,.06);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--t5);flex-shrink:0;}
+.gp-import-nocover{width:36px;height:48px;background:var(--s1);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--t5);flex-shrink:0;}
 .gp-import-info{flex:1;min-width:0;font-size:13px;color:var(--t1);}
 .gp-import-year{color:var(--t4);font-size:12px;}
 .gp-import-action{flex-shrink:0;}
-.gp-import-done{font-size:12px;color:#10b981;display:inline-flex;align-items:center;gap:4px;}
+.gp-import-done{font-size:12px;color:var(--green);display:inline-flex;align-items:center;gap:4px;}
 
 /* ── Right widgets ── */
 .gp-sort-pills{display:flex;gap:4px;margin-bottom:6px;}
-.gp-sort-pill{background:rgba(255,255,255,.04);border:0.5px solid transparent;border-radius:6px;color:var(--t4);font-size:10px;padding:3px 8px;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.04em;}
+.gp-sort-pill{background:var(--s1);border:0.5px solid transparent;border-radius:6px;color:var(--t4);font-size:10px;padding:3px 8px;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.04em;}
 .gp-sort-pill.active{background:var(--ac-bg);color:var(--ac);border-color:var(--ac-border);}
 .gp-genre-cloud{display:flex;flex-wrap:wrap;gap:4px;}
-.gp-genre-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:10px;background:rgba(255,255,255,.05);border:0.5px solid rgba(255,255,255,.08);color:var(--t3);cursor:pointer;font-family:inherit;}
+.gp-genre-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:10px;background:var(--s1);border:0.5px solid var(--b1);color:var(--t3);cursor:pointer;font-family:inherit;}
 .gp-genre-pill:hover{background:var(--ac-bg);color:var(--ac);border-color:var(--ac-border);}
 .gp-genre-pill-count{font-size:10px;color:var(--t5);}
 
@@ -2122,29 +2172,29 @@
 .gp-psb-name{font-size:14px;font-weight:500;color:#fff;line-height:1.25;margin-bottom:2px;}
 .gp-psb-sub{font-size:11px;color:rgba(255,255,255,.38);}
 .gp-psb-awards{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
-.gp-psb-award{display:flex;align-items:center;background:rgba(251,191,36,.1);border:0.5px solid rgba(251,191,36,.25);border-radius:20px;padding:3px 9px;font-size:10px;color:#fbbf24;width:fit-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gp-psb-award{display:flex;align-items:center;background:rgba(251,191,36,.1);border:0.5px solid rgba(251,191,36,.25);border-radius:20px;padding:3px 9px;font-size:10px;color:var(--amber);width:fit-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .gp-psb-award-year{opacity:.5;margin-left:4px;}
-.gp-psb-stats{display:flex;margin-bottom:10px;border:0.5px solid rgba(255,255,255,.07);border-radius:8px;overflow:hidden;}
-.gp-psb-stat{flex:1;padding:7px 4px;text-align:center;border-right:0.5px solid rgba(255,255,255,.07);}
+.gp-psb-stats{display:flex;margin-bottom:10px;border:0.5px solid var(--b1);border-radius:8px;overflow:hidden;}
+.gp-psb-stat{flex:1;padding:7px 4px;text-align:center;border-right:0.5px solid var(--b1);}
 .gp-psb-stat:last-child{border-right:none;}
 .gp-psb-stat-n{font-size:13px;font-weight:500;color:var(--t1);margin-bottom:1px;}
 .gp-psb-stat-l{font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:.04em;}
 .gp-psb-btn{width:100%;padding:8px 0;border-radius:8px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;margin-bottom:6px;box-sizing:border-box;transition:opacity .12s;}
 .gp-psb-btn:hover{opacity:.85;}
 .gp-psb-btn-view{background:var(--ac-bg);border:0.5px solid var(--ac-border);color:var(--ac-text);}
-.gp-psb-btn-log{background:transparent;border:0.5px solid rgba(255,255,255,.12);color:var(--t3);}
+.gp-psb-btn-log{background:transparent;border:0.5px solid var(--b3);color:var(--t3);}
 .gp-psb-btn-added{background:var(--ac-bg);border:0.5px solid var(--ac-border);color:var(--ac-text);}
 .gp-psb-slideshow{margin:8px 0 6px;}
-.gp-psb-progress-bar{height:2px;background:rgba(255,255,255,.1);border-radius:2px;margin-bottom:8px;overflow:hidden;}
+.gp-psb-progress-bar{height:2px;background:var(--s3);border-radius:2px;margin-bottom:8px;overflow:hidden;}
 .gp-psb-progress-fill{height:100%;background:var(--ac);border-radius:2px;transition:width .1s linear;}
 .gp-psb-dots{display:flex;justify-content:center;gap:5px;}
-.gp-psb-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer;transition:background .15s;}
+.gp-psb-dot{width:6px;height:6px;border-radius:50%;background:var(--s3);cursor:pointer;transition:background .15s;}
 .gp-psb-dot.active{background:var(--ac);}
 
 /* ── Now Playing widget ── */
 .gp-now-playing{display:flex;align-items:center;gap:10px;padding:4px 0;}
 .gp-now-playing-cover{width:36px;height:48px;object-fit:cover;border-radius:5px;flex-shrink:0;}
-.gp-now-playing-nocover{width:36px;height:48px;background:rgba(255,255,255,.06);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--t4);}
+.gp-now-playing-nocover{width:36px;height:48px;background:var(--s1);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--t4);}
 .gp-now-playing-info{min-width:0;}
 .gp-now-playing-label{font-size:10px;color:var(--t4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
 .gp-now-playing-name{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -2157,7 +2207,7 @@
 .gp-gl-stats-playing-name{font-size:13px;color:var(--t1);font-weight:500;}
 .gp-gl-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
 @media(max-width:767.99px){.gp-gl-stat-grid{grid-template-columns:repeat(2,1fr);}}
-.gp-gl-stat-card{background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px;}
+.gp-gl-stat-card{background:var(--s1);border-radius:10px;padding:12px 14px;}
 .gp-gl-stat-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
 .gp-gl-stat-n{font-size:16px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gp-gl-stat-l{font-size:11px;color:var(--t4);margin-top:2px;}
@@ -2172,7 +2222,7 @@
 .gp-gl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
 .gp-gl-card{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;overflow:hidden;}
 .gp-gl-cover{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;}
-.gp-gl-cover-empty{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);font-size:32px;color:var(--t5);}
+.gp-gl-cover-empty{display:flex;align-items:center;justify-content:center;background:var(--s1);font-size:32px;color:var(--t5);}
 .gp-gl-card-info{padding:8px 10px;}
 .gp-gl-card-name{font-size:13px;font-weight:500;color:var(--t1);cursor:pointer;margin-bottom:2px;}
 .gp-gl-card-name:hover{color:var(--ac);}
@@ -2183,17 +2233,17 @@
 
 /* ── Dropdown ── */
 .gp-dropdown{position:relative;display:inline-block;}
-.gp-dropdown-trigger{background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:8px;color:var(--t1);font-size:13px;padding:7px 12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;}
-.gp-dropdown-trigger:hover{background:rgba(255,255,255,.1);}
+.gp-dropdown-trigger{background:var(--s1);border:0.5px solid var(--b2);border-radius:8px;color:var(--t1);font-size:13px;padding:7px 12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;}
+.gp-dropdown-trigger:hover{background:var(--s3);}
 .gp-dropdown-menu{position:absolute;top:calc(100% + 4px);left:0;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;padding:4px;z-index:100;min-width:140px;box-shadow:0 4px 12px rgba(0,0,0,.3);}
 .gp-dropdown-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--t2);font-size:13px;padding:7px 10px;border-radius:6px;cursor:pointer;font-family:inherit;}
-.gp-dropdown-item:hover{background:rgba(255,255,255,.06);}
+.gp-dropdown-item:hover{background:var(--s1);}
 .gp-dropdown-item.active{background:var(--ac-bg);color:var(--ac);}
 
 /* ── Stars ── */
 .gp-stars{display:inline-flex;gap:2px;}
-.gp-stars i{color:rgba(255,255,255,.18);}
-.gp-stars i.filled{color:#fbbf24;}
+.gp-stars i{color:var(--t5);}
+.gp-stars i.filled{color:var(--amber);}
 
 /* ── Game detail ── */
 .gp-detail{padding:0 0 32px;}
@@ -2228,14 +2278,14 @@
 .gp-award{padding:8px 12px;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;font-size:13px;color:var(--t2);}
 .gp-award-year{color:var(--t4);}
 .gp-detail-info-block{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;padding:12px 14px;}
-.gp-detail-info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid rgba(255,255,255,.05);}
+.gp-detail-info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--b1);}
 .gp-detail-info-row:last-child{border-bottom:none;}
 .gp-detail-info-key{font-size:12px;color:var(--t4);}
 .gp-detail-info-val{font-size:12px;color:var(--t2);text-align:right;}
 .gp-detail-threads{background:var(--s2);border:0.5px solid var(--b1);border-radius:10px;overflow:hidden;}
 .gp-detail-thread-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:0.5px solid var(--b1);cursor:pointer;}
 .gp-detail-thread-row:last-child{border-bottom:none;}
-.gp-detail-thread-row:hover{background:rgba(255,255,255,.03);}
+.gp-detail-thread-row:hover{background:var(--s1);}
 .gp-detail-thread-avatar{width:28px;height:28px;border-radius:var(--av-radius);object-fit:cover;flex-shrink:0;}
 .gp-detail-thread-avatar-init{background:var(--ac-bg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:var(--ac);}
 .gp-detail-thread-body{flex:1;min-width:0;}
@@ -2248,32 +2298,32 @@
 .gp-admin-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 .gp-admin-count{font-size:12px;color:var(--t4);margin-bottom:10px;}
 .gp-admin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
-.gp-admin-card{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;}
+.gp-admin-card{background:var(--s1);border:0.5px solid var(--b1);border-radius:10px;overflow:hidden;}
 .gp-admin-card-cover{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;}
-.gp-admin-card-nocover{width:100%;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--t5);background:rgba(255,255,255,.04);}
+.gp-admin-card-nocover{width:100%;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--t5);background:var(--s1);}
 .gp-admin-card-info{padding:8px 8px 4px;}
 .gp-admin-card-name{font-size:12px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gp-admin-card-year{font-size:11px;color:var(--t4);margin-top:1px;}
 .gp-admin-card-genres{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
 .gp-admin-card-actions{display:flex;gap:4px;padding:4px 6px 6px;}
-.gp-admin-btn{background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:6px;color:var(--t3);cursor:pointer;flex:1;font-size:11px;padding:5px;font-family:inherit;transition:background .12s,color .12s;}
-.gp-admin-btn:hover{background:rgba(255,255,255,.1);color:var(--t1);}
+.gp-admin-btn{background:var(--s1);border:0.5px solid var(--b2);border-radius:6px;color:var(--t3);cursor:pointer;flex:1;font-size:11px;padding:5px;font-family:inherit;transition:background .12s,color .12s;}
+.gp-admin-btn:hover{background:var(--s3);color:var(--t1);}
 .gp-admin-btn:disabled{opacity:.4;cursor:default;}
-.gp-admin-btn-danger{color:#fca5a5;border-color:rgba(248,113,113,.3);}
-.gp-admin-btn-danger:hover{background:rgba(248,113,113,.1);color:#fca5a5;}
+.gp-admin-btn-danger{color:var(--red);border-color:rgba(248,113,113,.3);}
+.gp-admin-btn-danger:hover{background:rgba(248,113,113,.1);color:var(--red);}
 .gp-admin-genres{display:flex;flex-direction:column;gap:6px;}
 .gp-admin-genre{display:flex;align-items:center;justify-content:space-between;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;padding:8px 12px;}
 .gp-admin-genre-name{font-size:13px;color:var(--t1);}
 .gp-admin-genre-count{font-size:11px;color:var(--t4);}
-.gp-admin-award-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,.04);}
+.gp-admin-award-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--b1);}
 .gp-admin-award-year{font-size:11px;color:var(--t4);width:50px;}
 .gp-admin-award-title{flex:1;font-size:13px;color:var(--t1);}
-.gp-genre-toggle{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:14px;color:var(--t2);font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;}
+.gp-genre-toggle{background:var(--s1);border:0.5px solid var(--b1);border-radius:14px;color:var(--t2);font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;}
 .gp-genre-toggle.active{background:var(--ac-bg);border-color:var(--ac-border);color:var(--ac);}
 
 /* ── Stats ── */
 .gp-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px;}
-.gp-stat-card{background:rgba(255,255,255,.04);border:0.5px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;}
+.gp-stat-card{background:var(--s1);border:0.5px solid var(--b1);border-radius:10px;padding:14px;}
 .gp-stat-card.warn{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.05);}
 .gp-stat-value{font-size:20px;font-weight:600;color:var(--t1);}
 .gp-stat-label{font-size:11px;color:var(--t4);margin-top:2px;}
@@ -2286,9 +2336,9 @@
 /* ── Post footer slot ──────────────────────────────────────────────────────── */
 .gp-post-footer{margin-top:20px;}@media(min-width:1240px){.gp-post-footer{display:none!important;}}
 .gp-post-footer-tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
-.gp-post-footer-tab{background:rgba(255,255,255,.06);border:0.5px solid rgba(255,255,255,.1);border-radius:20px;padding:4px 14px;font-size:12px;color:var(--t3);cursor:pointer;transition:background .15s,color .15s;}
-.gp-post-footer-tab:hover{background:rgba(255,255,255,.1);color:var(--t1);}
-.gp-post-footer-tab-active{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:var(--t1);font-weight:500;}
+.gp-post-footer-tab{background:var(--s1);border:0.5px solid var(--b2);border-radius:20px;padding:4px 14px;font-size:12px;color:var(--t3);cursor:pointer;transition:background .15s,color .15s;}
+.gp-post-footer-tab:hover{background:var(--s3);color:var(--t1);}
+.gp-post-footer-tab-active{background:var(--s3);border-color:var(--b3);color:var(--t1);font-weight:500;}
 .gp-post-footer-hero{position:relative;display:block;border-radius:12px;overflow:hidden;min-height:140px;text-decoration:none;cursor:pointer;}
 .gp-post-footer-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(2px) brightness(.45);}
 .gp-post-footer-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(13,13,20,.85) 0%,rgba(13,13,20,.5) 100%);}
@@ -2306,7 +2356,7 @@
 .gp-compose-attachments-list{display:flex;flex-wrap:wrap;gap:8px;}
 .gp-compose-chip{display:flex;align-items:center;gap:8px;background:var(--s2);border:0.5px solid var(--b1);border-radius:8px;padding:6px 10px 6px 6px;max-width:280px;}
 .gp-compose-chip-cover{width:32px;height:42px;border-radius:4px;object-fit:cover;flex-shrink:0;}
-.gp-compose-chip-cover-empty{background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;color:var(--t4);font-size:14px;}
+.gp-compose-chip-cover-empty{background:var(--s1);display:flex;align-items:center;justify-content:center;color:var(--t4);font-size:14px;}
 .gp-compose-chip-name{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
 .gp-compose-chip-remove{background:none;border:none;color:var(--t4);cursor:pointer;font-size:12px;padding:0 0 0 4px;line-height:1;flex-shrink:0;}
 .gp-compose-chip-remove:hover{color:var(--t1);}
@@ -2385,6 +2435,9 @@
     scope:    "posts",
     priority: 50,
     onClick({ attach }) {
+      // Primes the linked-games cap if the composer is the first Gamepedia
+      // surface this page has shown; falls back to the default until it lands.
+      ensureConfig();
       openGamePickerModal({
         max: getMaxLinkedGames(),
         onConfirm(games) {
@@ -2420,22 +2473,7 @@
     priority: 60,
   });
 
-  // ---------------------------------------------------------------------------
-  // Config bootstrap — fetch UI-affecting settings once and cache on window.
-  //
-  // `getMaxLinkedGames()` and `getSlideshowSeconds()` read these globals with
-  // fallback to manifest defaults. The fetch happens after registrations so
-  // routes are resolvable even if /config 404s in dev. Failure is non-fatal:
-  // the helpers fall back to the schema defaults.
-  // ---------------------------------------------------------------------------
-
-  apiFetch("/config")
-    .then(r => {
-      const cfg = r?.data;
-      if (cfg) {
-        if (typeof cfg.max_linked_games === "number")  window._gpMaxLinkedGames   = cfg.max_linked_games;
-        if (typeof cfg.slideshow_seconds === "number") window._gpSlideshowSeconds = cfg.slideshow_seconds;
-      }
-    })
-    .catch(() => { /* fall back to defaults inside the helpers */ });
+  // Config is fetched lazily by ensureConfig(), called from the surfaces that
+  // actually depend on it. See the comment on ensureConfig above for why this
+  // is no longer done eagerly at bundle load.
 })();

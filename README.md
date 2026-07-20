@@ -32,7 +32,7 @@ Nexus will fetch the new release tarball, purge the old compiled modules, recomp
 
 - **Game library** — import games from IGDB with cover art, screenshots, trailers, genres, and metadata
 - **Game detail pages** — full game info, community ratings (1–5), awards, linked forum threads, screenshots
-- **Gamelog** — members can track games they've played, mark what they're currently playing, and view stats. Surfaced as a tab on every user's profile, and as a small link in the profile sidebar
+- **Gamelog** — members can track games they've played, mark what they're currently playing, and view stats. Surfaced as a tab on every user's profile, and as a "View Gamelog" action on the user card popover
 - **Ratings** — 1–5 per-user star ratings with community average and score distribution chart
 - **Awards** — admin-curated accolades (e.g. "Game of the Year 2024") displayed on game pages
 - **Post linking** — link any forum thread to a game via the composer toolbar
