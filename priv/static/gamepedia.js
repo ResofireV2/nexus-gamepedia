@@ -490,14 +490,21 @@
 
     const isOwner = !!(data && data.is_owner);
 
-    function load(p, s, g, q) {
+    // `append` mirrors GameBrowsePage's Load more behaviour: page 1 replaces,
+    // later pages concatenate. The server only computes and returns `stats` on
+    // page 1 (it is the expensive part of the response), so an appended page
+    // carries stats: null — carry the existing value forward rather than
+    // blanking the header.
+    function load(p, s, g, q, append = false) {
       setLoading(true);
       const params = new URLSearchParams({ page: p, sort: s });
       if (g) params.set("genre", g);
       if (q) params.set("search", q);
       apiFetch("/users/" + encodeURIComponent(username) + "/gamelog?" + params)
         .then(r => {
-          setData(r);
+          setData(prev => append && prev
+            ? { ...r, data: [...(prev.data || []), ...(r.data || [])], stats: r.stats || prev.stats }
+            : r);
           setLoading(false);
         })
         // apiFetch rejects on a non-2xx response, so the server's message
@@ -507,16 +514,24 @@
 
     useEffect(() => { load(1, sort, genre, search); }, [username]);
 
+    // Both mutations change the collection, so they reload from page 1 and
+    // reset the cursor. Reloading only the current page would drop every
+    // previously appended page from view.
+    function reloadFromStart() {
+      setPage(1);
+      load(1, sort, genre, search);
+    }
+
     function removeGame(game) {
       apiFetch("/gamelog/" + game.id, { method: "DELETE" })
-        .then(() => load(page, sort, genre, search));
+        .then(reloadFromStart);
     }
 
     function markPlaying(game) {
       if (playingBusy) return;
       setPlayingBusy(true);
       apiFetch("/gamelog/" + game.id + "/playing", { method: "POST", body: {} })
-        .then(() => load(page, sort, genre, search))
+        .then(reloadFromStart)
         .finally(() => setPlayingBusy(false));
     }
 
@@ -530,6 +545,9 @@
     const stats  = data.stats;
     const genres = data.filters?.genres || [];
     const total  = data.meta?.total || 0;
+    // meta.total is the unpaginated count, so this is true whenever pages
+    // remain unfetched.
+    const hasMore = games.length < total;
 
     return e("div", { className: "gp-gamelog-page" },
       // Stats: Currently playing banner (when set) + 4-card grid with icons.
@@ -641,7 +659,21 @@
                 )
               )
             ))
-          )
+          ),
+
+      // Load more. The backend has always paginated this listing at 16 per
+      // page and returned meta.total / meta.last_page, but no control was ever
+      // rendered — so a gamelog larger than one page silently appeared
+      // truncated with no way to reach the rest.
+      hasMore && e("div", { style: { textAlign: "center", padding: "20px 0" } },
+        e("button", {
+          className: "gp-btn",
+          disabled:  loading,
+          onClick:   () => { const p = page + 1; setPage(p); load(p, sort, genre, search, true); },
+        }, loading ? "Loading\u2026" : "Load more"),
+        e("div", { style: { marginTop: 8, fontSize: 12, color: "var(--t5)" } },
+          "Showing " + games.length + " of " + total)
+      )
     );
   }
 
