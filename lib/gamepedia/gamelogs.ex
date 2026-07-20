@@ -200,23 +200,26 @@ defmodule Gamepedia.Gamelogs do
   end
 
   @doc """
-  Returns the subset of `game_ids` that are in `user_id`'s gamelog, as a
-  MapSet of game ids.
+  Returns `%{game_id => is_playing}` for whichever of `game_ids` are in
+  `user_id`'s gamelog. Absence from the map means the game is not logged.
+
+  Carries is_playing as well as membership because callers that show an
+  "in gamelog" control generally also need to label it correctly.
 
   Callers that need to show an in-gamelog indicator for a handful of games
   previously fetched page one of the user's full gamelog and tested
   membership against it. That was both wasteful and wrong: the listing is
   paginated at 16, so any game outside the first page reported as not-added.
   """
-  def game_ids_in_log(_user_id, []), do: MapSet.new()
+  def log_state_for_games(_user_id, []), do: %{}
 
-  def game_ids_in_log(user_id, game_ids) when is_list(game_ids) do
+  def log_state_for_games(user_id, game_ids) when is_list(game_ids) do
     from(gl in @table,
       where: gl.user_id == ^user_id and gl.game_id in ^game_ids,
-      select: gl.game_id
+      select: {gl.game_id, gl.is_playing}
     )
     |> Repo.all()
-    |> MapSet.new()
+    |> Map.new()
   end
 
   # ---------------------------------------------------------------------------

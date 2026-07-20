@@ -51,7 +51,8 @@ defmodule Gamepedia.GamelogController do
   # ---------------------------------------------------------------------------
   # Membership check
   #
-  # GET /gamelog/check?game_ids=1,2,3 -> %{data: %{"1" => true, "2" => false}}
+  # GET /gamelog/check?game_ids=1,2,3
+  #   -> %{data: %{"1" => %{added: true, playing: false}, "2" => %{added: false, playing: false}}}
   #
   # Callers showing an in-gamelog indicator for a handful of games used to
   # fetch page one of the viewer's full gamelog and test membership against
@@ -80,8 +81,15 @@ defmodule Gamepedia.GamelogController do
         json(conn, %{data: %{}})
 
       true ->
-        in_log = Gamelogs.game_ids_in_log(user_id, ids)
-        json(conn, %{data: Map.new(ids, &{Integer.to_string(&1), MapSet.member?(in_log, &1)})})
+        state = Gamelogs.log_state_for_games(user_id, ids)
+
+        json(conn, %{
+          data:
+            Map.new(ids, fn id ->
+              {Integer.to_string(id),
+               %{added: Map.has_key?(state, id), playing: Map.get(state, id, false)}}
+            end)
+        })
     end
   end
 

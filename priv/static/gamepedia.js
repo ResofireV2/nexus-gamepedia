@@ -361,7 +361,7 @@
 
     if (games.length === 0) return null;
     const game = games[activeIdx] || games[0];
-    const inGamelog = !!gamelogIds[game.id];
+    const inGamelog = !!gamelogIds[game.id]?.added;
     const awards = game.awards || [];
 
     function toggleGamelog() {
@@ -787,7 +787,8 @@
             // grown past the first page.
             apiFetch("/gamelog/check?game_ids=" + g.id)
               .then(gr => {
-                if (gr.data && gr.data[String(g.id)]) setInGamelog(true);
+                const st = gr.data?.[String(g.id)];
+                if (st?.added) { setInGamelog(true); setIsPlaying(!!st.playing); }
               })
               .catch(() => {});
           }
