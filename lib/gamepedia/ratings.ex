@@ -51,23 +51,62 @@ defmodule Gamepedia.Ratings do
   # ---------------------------------------------------------------------------
 
   def summary(game_id) do
-    rows =
+    # One GROUP BY instead of loading every rating row into memory. The old
+    # version did Repo.all/1 on all ratings for the game and reduced in
+    # Elixir, which meant a popular game pulled thousands of rows on every
+    # game-page view and on every rate action.
+    counts =
       from(r in @table,
         where: r.game_id == ^game_id,
-        select: r.rating
+        group_by: r.rating,
+        select: {r.rating, count(r.id)}
       )
       |> Repo.all()
+      |> Map.new()
 
-    count = length(rows)
-    avg   = if count > 0, do: Float.round(Enum.sum(rows) / count, 1), else: nil
+    build_summary(counts)
+  end
+
+  @doc """
+  Rating summaries for several games at once, returned as
+  `%{game_id => summary}`. Games with no ratings are present with a zeroed
+  summary so callers can index without a fallback.
+
+  Exists so list views (linked games on a post, browse pages) can render
+  ratings with one query instead of one per game.
+  """
+  def summaries_for_games([]), do: %{}
+
+  def summaries_for_games(game_ids) when is_list(game_ids) do
+    grouped =
+      from(r in @table,
+        where: r.game_id in ^game_ids,
+        group_by: [r.game_id, r.rating],
+        select: {r.game_id, r.rating, count(r.id)}
+      )
+      |> Repo.all()
+      |> Enum.group_by(fn {gid, _, _} -> gid end, fn {_, rating, cnt} -> {rating, cnt} end)
+
+    Map.new(game_ids, fn gid ->
+      {gid, build_summary(Map.new(grouped[gid] || []))}
+    end)
+  end
+
+  # Turns a %{score => count} map into the response shape, filling in any
+  # score from 1..5 that nobody has used.
+  defp build_summary(counts) do
+    total = counts |> Map.values() |> Enum.sum()
+
+    avg =
+      if total > 0 do
+        sum = Enum.reduce(counts, 0, fn {score, cnt}, acc -> acc + score * cnt end)
+        Float.round(sum / total, 1)
+      end
 
     distribution =
-      Enum.reduce(1..5, %{}, fn n, acc -> Map.put(acc, n, 0) end)
-      |> then(fn base -> Enum.reduce(rows, base, fn r, acc -> Map.update(acc, r, 1, &(&1 + 1)) end) end)
-      |> Enum.map(fn {score, cnt} -> %{score: score, count: cnt} end)
-      |> Enum.sort_by(& &1.score)
+      Enum.map(1..5, fn score -> %{score: score, count: Map.get(counts, score, 0)} end)
 
-    %{count: count, avg: avg, distribution: distribution}
+    %{count: total, avg: avg, distribution: distribution}
   end
 
   # ---------------------------------------------------------------------------
@@ -83,8 +122,17 @@ defmodule Gamepedia.Ratings do
   end
 
   # ---------------------------------------------------------------------------
-  # Bulk-fetch user ratings for multiple games (used in gamelog page)
-  # Returns %{game_id => rating}
+  # Bulk-fetch a user's own ratings for several games. Returns %{game_id => rating}.
   # ---------------------------------------------------------------------------
 
+  def user_ratings_for_games(_user_id, []), do: %{}
+
+  def user_ratings_for_games(user_id, game_ids) when is_list(game_ids) do
+    from(r in @table,
+      where: r.user_id == ^user_id and r.game_id in ^game_ids,
+      select: {r.game_id, r.rating}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
 end

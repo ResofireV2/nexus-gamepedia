@@ -15,7 +15,6 @@ defmodule Gamepedia.Igdb do
   @igdb_base_url    "https://api.igdb.com/v4"
   @image_url        "https://images.igdb.com/igdb/image/upload/t_{size}/{id}.jpg"
   @token_cache_key  "gamepedia:igdb_token"
-  @token_table      :gamepedia_igdb_token
 
   # ---------------------------------------------------------------------------
   # Public API
@@ -75,31 +74,17 @@ defmodule Gamepedia.Igdb do
   # Token management — ETS-backed cache
   # ---------------------------------------------------------------------------
 
-  @doc """
-  Ensures the ETS token cache table exists. Called by the Application supervisor.
-  """
-  def init_cache do
-    :ets.new(@token_table, [:named_table, :public, :set])
-  rescue
-    ArgumentError -> :ok  # table already exists
-  end
-
   defp get_token(client_id, client_secret) do
-    # Ensure the cache table exists — creates it if not, no-ops if it does.
-    init_cache()
-
+    # The cache table is owned by Gamepedia.TokenCache, a supervised process
+    # started via child_specs/0. It used to be created lazily here with
+    # :ets.new/2, which meant the request process owned it and the table was
+    # destroyed the moment the response was sent — so every IGDB call paid for
+    # a fresh Twitch OAuth round-trip.
     cache_key = "#{@token_cache_key}:#{client_id}"
 
-    case :ets.lookup(@token_table, cache_key) do
-      [{^cache_key, token, expires_at}] ->
-        if System.system_time(:second) < expires_at do
-          {:ok, token}
-        else
-          fetch_token(client_id, client_secret, cache_key)
-        end
-
-      [] ->
-        fetch_token(client_id, client_secret, cache_key)
+    case Gamepedia.TokenCache.fetch(cache_key) do
+      {:ok, token} -> {:ok, token}
+      :miss        -> fetch_token(client_id, client_secret, cache_key)
     end
   end
 
@@ -116,7 +101,7 @@ defmodule Gamepedia.Igdb do
         expires_in = body["expires_in"] || 5_184_000
         expires_at = System.system_time(:second) + trunc(expires_in * 0.9)
 
-        :ets.insert(@token_table, {cache_key, token, expires_at})
+        Gamepedia.TokenCache.put(cache_key, token, expires_at)
         {:ok, token}
 
       {:ok, %{status: status}} ->
@@ -225,6 +210,12 @@ defmodule Gamepedia.Igdb do
 
     # Pick the first candidate that has a maxresdefault thumbnail available.
     # Falls back to the first candidate if none have it (client-side onError handles hqdefault).
+    #
+    # Capped at three probes. Each is a blocking HTTP HEAD on the import path,
+    # and a game with a dozen videos previously serialised a dozen of them
+    # before the import could return.
+    candidates = Enum.take(candidates, 3)
+
     Enum.find(candidates, List.first(candidates), fn video_id ->
       url = "https://i.ytimg.com/vi/#{video_id}/maxresdefault.jpg"
       case Req.head(url, receive_timeout: 3_000) do

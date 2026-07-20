@@ -16,6 +16,7 @@ defmodule Gamepedia.PostGames do
   import Ecto.Query
   alias Nexus.Repo
   alias Gamepedia.Games.Game
+  alias Gamepedia.Games.Screenshot
 
   @post_game_table "gamepedia_post_game"
 
@@ -56,21 +57,34 @@ defmodule Gamepedia.PostGames do
   # ---------------------------------------------------------------------------
 
   def list_games_for_post(post_id) do
-    alias Gamepedia.Games.Screenshot
+    from(g in Game,
+      join: pg in @post_game_table, on: pg.game_id == g.id,
+      where: pg.post_id == ^post_id,
+      order_by: [asc: g.name]
+    )
+    |> Repo.all()
+    |> Repo.preload([:genres, screenshots: first_screenshot_query()])
+  end
 
-    games =
-      from(g in Game,
-        join: pg in @post_game_table, on: pg.game_id == g.id,
-        where: pg.post_id == ^post_id,
-        order_by: [asc: g.name]
-      )
-      |> Repo.all()
+  # Returns a query that yields the lowest-ordered screenshot for EACH game.
+  #
+  # The obvious formulation — `from(s in Screenshot, order_by: :order, limit: 1)`
+  # — is wrong. Ecto documents that limit and offset in a preload query apply
+  # to the whole result set rather than per association, so that version
+  # returned exactly one screenshot across every game on the post: the first
+  # game got an image and the rest silently got none.
+  #
+  # Partitioning by game_id and filtering on row_number is the form Ecto's own
+  # docs prescribe for "top N per parent".
+  defp first_screenshot_query do
+    ranked =
+      from s in Screenshot,
+        select: %{id: s.id, row_number: over(row_number(), :game_partition)},
+        windows: [game_partition: [partition_by: s.game_id, order_by: s.order]]
 
-    # Preload genres and only the first screenshot per game.
-    # The screenshot limit avoids fetching the full list for a single bg image.
-    games
-    |> Repo.preload(:genres)
-    |> Repo.preload(screenshots: from(s in Screenshot, order_by: [asc: s.order], limit: 1))
+    from s in Screenshot,
+      join: r in subquery(ranked),
+      on: r.id == s.id and r.row_number == 1
   end
 
   # ---------------------------------------------------------------------------
@@ -90,6 +104,22 @@ defmodule Gamepedia.PostGames do
   def thread_count(game_id) do
     from(pg in @post_game_table, where: pg.game_id == ^game_id)
     |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Thread counts for several games at once, as `%{game_id => count}`. Games
+  with no linked threads are absent; callers should default to 0.
+  """
+  def thread_counts([]), do: %{}
+
+  def thread_counts(game_ids) when is_list(game_ids) do
+    from(pg in @post_game_table,
+      where: pg.game_id in ^game_ids,
+      group_by: pg.game_id,
+      select: {pg.game_id, count(pg.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   # ---------------------------------------------------------------------------

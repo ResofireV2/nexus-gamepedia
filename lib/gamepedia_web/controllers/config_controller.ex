@@ -19,9 +19,13 @@ defmodule Gamepedia.ConfigController do
   alias Gamepedia.Settings
 
   def show(conn, _params) do
+    # One settings read, two values. Calling get_int/2 twice meant two
+    # uncached DB round-trips to serve a two-field response.
+    settings = Settings.all()
+
     json(conn, %{data: %{
-      max_linked_games:  Settings.get_int("max_linked_games",  3),
-      slideshow_seconds: Settings.get_int("slideshow_seconds", 5),
+      max_linked_games:  Settings.get_int(settings, "max_linked_games",  3),
+      slideshow_seconds: Settings.get_int(settings, "slideshow_seconds", 5),
     }})
   end
 end

@@ -5,7 +5,7 @@ defmodule Gamepedia.Games do
 
   import Ecto.Query
   alias Nexus.Repo
-  alias Gamepedia.Games.{Game, Screenshot}
+  alias Gamepedia.Games.Game
   alias Gamepedia.Genres.Genre
 
   @page_size 16
@@ -22,29 +22,36 @@ defmodule Gamepedia.Games do
     if Repo.exists?(from g in Game, where: g.igdb_id == ^igdb_id) do
       {:error, :already_exists}
     else
+      # The IGDB fetch happens before the transaction opens. Holding a pooled
+      # database connection open across a network round-trip is what made
+      # imports time out; the transaction below now only writes one row.
       with {:ok, data} <- Gamepedia.Igdb.fetch_game(igdb_id, client_id, client_secret) do
         slug = generate_slug(data.name, data.first_release_date, igdb_id)
 
-        Repo.transaction(fn ->
-          game =
-            %Game{}
-            |> Game.changeset(%{
-              igdb_id:            data.igdb_id,
-              name:               data.name,
-              slug:               slug,
-              summary:            data.summary,
-              cover_image_url:    data.cover_image_url,
-              trailer_youtube_id: data.trailer_youtube_id,
-              developer:          data.developer,
-              publisher:          data.publisher,
-              first_release_date: data.first_release_date,
-              raw_igdb_data:      data.raw_igdb_data
-            })
-            |> Repo.insert!()
+        changeset =
+          Game.changeset(%Game{}, %{
+            igdb_id:            data.igdb_id,
+            name:               data.name,
+            slug:               slug,
+            summary:            data.summary,
+            cover_image_url:    data.cover_image_url,
+            trailer_youtube_id: data.trailer_youtube_id,
+            developer:          data.developer,
+            publisher:          data.publisher,
+            first_release_date: data.first_release_date,
+            raw_igdb_data:      data.raw_igdb_data
+          })
 
-          save_screenshots(game.id, data.screenshots)
-          Repo.preload(game, [:genres, :screenshots])
-        end)
+        case Repo.insert(changeset) do
+          {:ok, game} ->
+            # Screenshots are downloaded and converted asynchronously. The
+            # game is usable immediately; images appear when the job lands.
+            Gamepedia.Workers.SyncScreenshots.enqueue(game.id, data.screenshots, "fill")
+            {:ok, Repo.preload(game, [:genres, :screenshots])}
+
+          {:error, changeset} ->
+            {:error, changeset}
+        end
       end
     end
   end
@@ -57,9 +64,8 @@ defmodule Gamepedia.Games do
       nil -> {:error, :not_found}
       game ->
         with {:ok, data} <- Gamepedia.Igdb.fetch_game(game.igdb_id, client_id, client_secret) do
-          Repo.transaction(fn ->
-            game
-            |> Game.changeset(%{
+          changeset =
+            Game.changeset(game, %{
               name:               data.name,
               summary:            data.summary,
               cover_image_url:    data.cover_image_url,
@@ -69,16 +75,19 @@ defmodule Gamepedia.Games do
               first_release_date: data.first_release_date,
               raw_igdb_data:      data.raw_igdb_data
             })
-            |> Repo.update!()
 
-            # Delete old screenshots (files + DB rows) and save fresh ones
-            old_screenshots = Repo.all(from s in Screenshot, where: s.game_id == ^game.id)
-            Enum.each(old_screenshots, &delete_screenshot_files/1)
-            Repo.delete_all(from s in Screenshot, where: s.game_id == ^game.id)
-            save_screenshots(game.id, data.screenshots)
+          case Repo.update(changeset) do
+            {:ok, updated} ->
+              # "replace" purges existing screenshot rows and files, then
+              # re-downloads. Both happen in the job, outside any transaction:
+              # deleting files inside one meant a rollback restored the rows
+              # but could not restore the images they pointed at.
+              Gamepedia.Workers.SyncScreenshots.enqueue(updated.id, data.screenshots, "replace")
+              {:ok, Repo.preload(updated, [:genres, :screenshots])}
 
-            Repo.preload(Repo.reload!(game), [:genres, :screenshots])
-          end)
+            {:error, changeset} ->
+              {:error, changeset}
+          end
         end
     end
   end
@@ -91,8 +100,9 @@ defmodule Gamepedia.Games do
     case get_game(id) do
       nil  -> {:error, :not_found}
       game ->
-        screenshots = Repo.all(from s in Screenshot, where: s.game_id == ^game.id)
-        Enum.each(screenshots, &delete_screenshot_files/1)
+        # Removes both the rows and the files on disk. Rows would cascade via
+        # the FK anyway, but the files would be orphaned.
+        Gamepedia.Workers.SyncScreenshots.purge_existing(game.id)
         Repo.delete(game)
     end
   end
@@ -105,6 +115,22 @@ defmodule Gamepedia.Games do
 
   def gamelog_count(game_id) do
     Repo.aggregate(from(gl in "gamepedia_gamelogs", where: gl.game_id == ^game_id), :count)
+  end
+
+  @doc """
+  Gamelog counts for several games at once, as `%{game_id => count}`. Games
+  nobody has logged are absent; callers should default to 0.
+  """
+  def gamelog_counts([]), do: %{}
+
+  def gamelog_counts(game_ids) when is_list(game_ids) do
+    from(gl in "gamepedia_gamelogs",
+      where: gl.game_id in ^game_ids,
+      group_by: gl.game_id,
+      select: {gl.game_id, count(gl.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
   end
 
   def get_game_by_slug(slug) do
@@ -124,7 +150,9 @@ defmodule Gamepedia.Games do
     genre  = Map.get(params, "genre",  "") |> String.trim()
     year   = Map.get(params, "year",   "") |> String.trim()
     sort   = Map.get(params, "sort",   "newest")
-    page   = max(1, String.to_integer(to_string(Map.get(params, "page", "1"))))
+    # String.to_integer/1 raises on non-numeric input, so "?page=abc" from a
+    # crawler or a hand-edited URL returned a 500. Parse defensively instead.
+    page   = max(1, parse_page(Map.get(params, "page", 1)))
 
     query =
       from g in Game,
@@ -156,16 +184,23 @@ defmodule Gamepedia.Games do
       |> Repo.all()
       |> Enum.map(&%{id: &1.id, name: &1.name, slug: &1.slug})
 
-    years =
-      from(g in Game,
-        where: not is_nil(g.first_release_date),
-        select: fragment("EXTRACT(YEAR FROM to_timestamp(?))::int", g.first_release_date),
-        distinct: true,
-        order_by: [desc: fragment("EXTRACT(YEAR FROM to_timestamp(?))::int", g.first_release_date)]
-      )
-      |> Repo.all()
+    %{genres: genres, years: release_years()}
+  end
 
-    %{genres: genres, years: years}
+  @doc """
+  Distinct release years across all games, newest first.
+
+  Computed in Postgres rather than by reading every `first_release_date` and
+  de-duplicating in Elixir.
+  """
+  def release_years do
+    from(g in Game,
+      where: not is_nil(g.first_release_date),
+      select: fragment("EXTRACT(YEAR FROM to_timestamp(?))::int", g.first_release_date),
+      distinct: true,
+      order_by: [desc: fragment("EXTRACT(YEAR FROM to_timestamp(?))::int", g.first_release_date)]
+    )
+    |> Repo.all()
   end
 
   # ---------------------------------------------------------------------------
@@ -189,8 +224,11 @@ defmodule Gamepedia.Games do
   # Screenshot storage
   # ---------------------------------------------------------------------------
 
-  # Screenshots are stored via Nexus.Extensions.Storage and served at
-  # /ext/gamepedia/assets/screenshots/* — no separate directory config needed.
+  # Screenshots are stored via Nexus.Extensions.Storage, which writes under
+  # <uploads_dir>/extensions/gamepedia/screenshots/ and serves them at
+  # /uploads/extensions/gamepedia/screenshots/* through Nexus's existing
+  # Plug.Static. This is a different path from /ext/gamepedia/assets/*, which
+  # serves the bundled priv/static files copied in at install time.
   @screenshot_subdir "screenshots"
 
   @doc """
@@ -205,55 +243,14 @@ defmodule Gamepedia.Games do
   # Private helpers
   # ---------------------------------------------------------------------------
 
-  defp save_screenshots(game_id, screenshots) do
-    for {s, idx} <- Enum.with_index(screenshots) do
-      {local_path, webp_path} = download_and_convert(s.igdb_image_id, s.url)
-
-      %Screenshot{}
-      |> Screenshot.changeset(%{
-        game_id:       game_id,
-        igdb_image_id: s.igdb_image_id,
-        url:           s.url,
-        local_path:    local_path,
-        webp_path:     webp_path,
-        order:         Map.get(s, :order, idx)
-      })
-      |> Repo.insert!()
+  defp parse_page(v) when is_integer(v), do: v
+  defp parse_page(v) when is_binary(v) do
+    case Integer.parse(v) do
+      {i, _} -> i
+      :error -> 1
     end
   end
-
-  # Download the IGDB screenshot at full resolution (t_1080p), save as jpg,
-  # then convert to webp. Returns {local_rel_path, webp_rel_path} or {nil, nil}
-  # on failure (falls back to the original IGDB URL in the UI).
-  defp download_and_convert(image_id, igdb_url) do
-    full_url  = String.replace(igdb_url, "t_screenshot_big", "t_1080p")
-    filename  = "#{image_id}.jpg"
-    webp_name = "#{image_id}.webp"
-
-    :ok      = Nexus.Extensions.Storage.ensure_dir("gamepedia", @screenshot_subdir)
-    abs_jpg  = Nexus.Extensions.Storage.path("gamepedia", "#{@screenshot_subdir}/#{filename}")
-    abs_webp = Nexus.Extensions.Storage.path("gamepedia", "#{@screenshot_subdir}/#{webp_name}")
-
-    with {:ok, %{status: 200, body: body}} <- Req.get(full_url, receive_timeout: 30_000),
-         :ok              <- File.write(abs_jpg, body),
-         {:ok, image}     <- Image.open(abs_jpg),
-         {:ok, {image, _}} <- Image.autorotate(image),
-         {:ok, _}         <- Image.write(image, abs_webp, quality: 85, suffix: ".webp") do
-      {filename, webp_name}
-    else
-      err ->
-        require Logger
-        Logger.warning("Failed to download/convert screenshot #{image_id}: #{inspect(err)}")
-        {nil, nil}
-    end
-  end
-
-  defp delete_screenshot_files(%Screenshot{local_path: nil, webp_path: nil}), do: :ok
-  defp delete_screenshot_files(%Screenshot{local_path: local, webp_path: webp}) do
-    if local, do: File.rm(Nexus.Extensions.Storage.path("gamepedia", "#{@screenshot_subdir}/#{local}"))
-    if webp,  do: File.rm(Nexus.Extensions.Storage.path("gamepedia", "#{@screenshot_subdir}/#{webp}"))
-    :ok
-  end
+  defp parse_page(_), do: 1
 
   defp apply_sort(query, "az"),     do: order_by(query, [g], asc:  g.name)
   defp apply_sort(query, "za"),     do: order_by(query, [g], desc: g.name)

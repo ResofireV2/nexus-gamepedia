@@ -51,6 +51,20 @@ defmodule Gamepedia do
   end
 
   # ---------------------------------------------------------------------------
+  # Supervised processes
+  # ---------------------------------------------------------------------------
+
+  # TokenCache owns the ETS table holding the cached Twitch/IGDB OAuth token.
+  # An ETS table dies with the process that created it, so creating it lazily
+  # from a request process meant it was destroyed as soon as the response was
+  # sent and every IGDB call re-authenticated. Owning it from a supervised
+  # process started here keeps it alive for the life of the extension.
+  @impl true
+  def child_specs do
+    [Gamepedia.TokenCache]
+  end
+
+  # ---------------------------------------------------------------------------
   # Hook events
   # ---------------------------------------------------------------------------
 
@@ -65,12 +79,13 @@ defmodule Gamepedia do
   # Lifecycle
   # ---------------------------------------------------------------------------
 
-  @impl true
-  def on_uninstall do
-    # Clean up screenshot files and any other extension-owned storage.
-    Nexus.Extensions.Storage.delete_all("gamepedia")
-    :ok
-  end
+  # No on_uninstall/0 callback.
+  #
+  # Screenshot files used to be deleted here, but Nexus already calls
+  # Nexus.Extensions.Storage.delete_all/1 for the extension in both
+  # uninstall_extension/1 and force_uninstall_extension/1. Doing it again
+  # from the callback was redundant, and force-uninstall skips on_uninstall/0
+  # entirely — so the core path is the one that actually guarantees cleanup.
 
   # ---------------------------------------------------------------------------
   # Compose attachment persistence (side_data)

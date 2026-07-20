@@ -23,7 +23,7 @@ defmodule Gamepedia.Digest do
           url: "/ext/gamepedia/games/#{g.slug}"}
       end)
 
-      rendered = render_game_cards("New Games", items, nil, branding())
+      rendered = render_game_cards("New Games", items, branding())
       %{"_rendered_html" => rendered}
     end
   end
@@ -48,7 +48,7 @@ defmodule Gamepedia.Digest do
           cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
       end)
 
-      rendered = render_game_cards("Most Gamelog\u2019d", items, nil, branding())
+      rendered = render_game_cards("Most Gamelog\u2019d", items, branding())
       %{"_rendered_html" => rendered}
     end
   end
@@ -75,7 +75,7 @@ defmodule Gamepedia.Digest do
           cover_image_url: g.cover_image_url, url: "/ext/gamepedia/games/#{g.slug}"}
       end)
 
-      rendered = render_game_cards("Most Discussed", items, nil, branding())
+      rendered = render_game_cards("Most Discussed", items, branding())
       %{"_rendered_html" => rendered}
     end
   end
@@ -92,7 +92,7 @@ defmodule Gamepedia.Digest do
   # HTML renderer — game card grid
   # ---------------------------------------------------------------------------
 
-  defp render_game_cards(title, items, cta, branding) do
+  defp render_game_cards(title, items, branding) do
     accent   = Map.get(branding, :accent,  "#a78bfa")
     text_1   = Map.get(branding, :text_1,  "#f0eeff")
     text_4   = Map.get(branding, :text_4,  "rgba(255,255,255,0.35)")
@@ -104,12 +104,16 @@ defmodule Gamepedia.Digest do
       |> Enum.chunk_every(cols)
       |> Enum.map_join("", fn row ->
         cells = Enum.map_join(row, "", fn item ->
-          label    = item[:label] || ""
-          sublabel = item[:sublabel] || ""
-          value    = item[:value]
-          badge    = item[:badge]
-          cover    = item[:cover_image_url]
-          item_url = item[:url]
+          # Every value below is interpolated straight into an HTML string,
+          # so each is escaped. Game titles routinely contain "&" (e.g.
+          # "Command & Conquer") which produced invalid markup, and a title
+          # or developer containing a quote would break out of an attribute.
+          label    = esc(item[:label] || "")
+          sublabel = esc(item[:sublabel] || "")
+          value    = item[:value] && esc(item[:value])
+          badge    = item[:badge] && esc(item[:badge])
+          cover    = item[:cover_image_url] && esc(item[:cover_image_url])
+          item_url = item[:url] && esc(item[:url])
 
           href_open  = if item_url, do: "<a href=\"" <> base_url <> item_url <> "\" style=\"text-decoration:none;display:block;\">", else: "<div>"
           href_close = if item_url, do: "</a>", else: "</div>"
@@ -158,26 +162,22 @@ defmodule Gamepedia.Digest do
         "<tr>" <> cells <> padding <> "</tr>"
       end)
 
-    cta_html = if cta do
-      cta_href  = if cta[:url], do: base_url <> cta[:url], else: base_url
-      cta_label = cta[:label] || ""
-      "<p style=\"margin:12px 0 0;\"><a href=\"" <> cta_href <>
-      "\" style=\"color:" <> accent <> ";font-size:13px;\">" <> cta_label <> " \u2192</a></p>"
-    else "" end
-
     divider_html = "<div style=\"height:0.5px;background:" <> divider <> ";margin:24px 0;\"></div>"
 
     "<p style=\"margin:0 0 14px;font-size:11px;font-weight:500;color:" <> text_4 <>
     ";text-transform:uppercase;letter-spacing:0.8px;\">" <> title <> "</p>" <>
     "<table cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"margin-bottom:8px;table-layout:fixed;\">" <>
     rows_html <> "</table>" <>
-    cta_html <>
     divider_html
   end
 
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
+
+  # Plug.HTML.html_escape/1 is available through Nexus's dependency tree.
+  defp esc(nil), do: ""
+  defp esc(v),   do: v |> to_string() |> Plug.HTML.html_escape()
 
   defp subtitle(g) do
     [g.developer, release_year(g.first_release_date)]

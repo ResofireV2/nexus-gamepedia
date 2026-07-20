@@ -127,39 +127,46 @@ defmodule Gamepedia.Gamelogs do
   # ---------------------------------------------------------------------------
 
   def stats(user_id) do
-    all =
+    # Each figure below is its own aggregate. The previous version loaded the
+    # user's entire gamelog into memory with Repo.all/1 and reduced in Elixir
+    # to produce four numbers — so a member with a few thousand games pulled
+    # every row on each profile-tab view.
+    month_ago = DateTime.utc_now() |> DateTime.add(-30, :day) |> DateTime.truncate(:second)
+
+    total =
+      from(gl in @table, where: gl.user_id == ^user_id)
+      |> Repo.aggregate(:count)
+
+    added_this_month =
+      from(gl in @table,
+        where: gl.user_id == ^user_id and gl.inserted_at >= ^month_ago
+      )
+      |> Repo.aggregate(:count)
+
+    playing =
       from(g in Game,
         join: gl in @table, on: gl.game_id == g.id,
-        where: gl.user_id == ^user_id,
+        where: gl.user_id == ^user_id and gl.is_playing == true,
+        limit: 1,
         select: %{
           id:                 g.id,
           name:               g.name,
-          first_release_date: g.first_release_date,
-          is_playing:         gl.is_playing,
-          inserted_at:        gl.inserted_at
+          slug:               g.slug,
+          cover_image_url:    g.cover_image_url,
+          first_release_date: g.first_release_date
         }
       )
-      |> Repo.all()
+      |> Repo.one()
 
-    now       = DateTime.utc_now()
-    month_ago = DateTime.add(now, -30, :day)
-    total     = length(all)
-
-    added_this_month =
-      Enum.count(all, fn g ->
-        case g.inserted_at do
-          nil -> false
-          %NaiveDateTime{} = ndt ->
-            dt = DateTime.from_naive!(ndt, "Etc/UTC")
-            DateTime.compare(dt, month_ago) == :gt
-          %DateTime{} = dt ->
-            DateTime.compare(dt, month_ago) == :gt
-        end
-      end)
-
-    playing   = Enum.find(all, & &1.is_playing)
-    with_date = Enum.filter(all, & &1.first_release_date)
-    oldest    = Enum.min_by(with_date, & &1.first_release_date, fn -> nil end)
+    oldest =
+      from(g in Game,
+        join: gl in @table, on: gl.game_id == g.id,
+        where: gl.user_id == ^user_id and not is_nil(g.first_release_date),
+        order_by: [asc: g.first_release_date],
+        limit: 1,
+        select: %{name: g.name, first_release_date: g.first_release_date}
+      )
+      |> Repo.one()
 
     top_genre =
       from(g in "gamepedia_genres",
@@ -176,14 +183,40 @@ defmodule Gamepedia.Gamelogs do
     %{
       total:            total,
       added_this_month: added_this_month,
+      # slug and cover_image_url are included so the Now Playing widget can
+      # render and link to the game directly from stats. It previously read
+      # page one of the gamelog listing and scanned for is_playing, which
+      # missed the game entirely once a user's log grew past 16 entries.
       playing:          playing && %{
-        id:           playing.id,
-        name:         playing.name,
-        release_year: release_year(playing.first_release_date)
+        id:              playing.id,
+        name:            playing.name,
+        slug:            playing.slug,
+        cover_image_url: playing.cover_image_url,
+        release_year:    release_year(playing.first_release_date)
       },
       top_genre: top_genre,
       oldest:    oldest && %{name: oldest.name, year: release_year(oldest.first_release_date)}
     }
+  end
+
+  @doc """
+  Returns the subset of `game_ids` that are in `user_id`'s gamelog, as a
+  MapSet of game ids.
+
+  Callers that need to show an in-gamelog indicator for a handful of games
+  previously fetched page one of the user's full gamelog and tested
+  membership against it. That was both wasteful and wrong: the listing is
+  paginated at 16, so any game outside the first page reported as not-added.
+  """
+  def game_ids_in_log(_user_id, []), do: MapSet.new()
+
+  def game_ids_in_log(user_id, game_ids) when is_list(game_ids) do
+    from(gl in @table,
+      where: gl.user_id == ^user_id and gl.game_id in ^game_ids,
+      select: gl.game_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
   end
 
   # ---------------------------------------------------------------------------

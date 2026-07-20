@@ -29,6 +29,8 @@ defmodule Gamepedia.Router do
     post   "/gamelog",                   GamelogController, :add
     delete "/gamelog/:game_id",          GamelogController, :remove
     post   "/gamelog/:game_id/playing",  GamelogController, :toggle_playing
+    # Must precede /gamelog/:user_id so "check" is not captured as a user id.
+    get    "/gamelog/check",             GamelogController, :check
     get    "/gamelog/:user_id",          GamelogController, :index_by_user_id
     get    "/users/:username/gamelog",   GamelogController, :index_by_username
 

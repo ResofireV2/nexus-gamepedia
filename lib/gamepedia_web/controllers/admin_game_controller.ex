@@ -121,7 +121,8 @@ defmodule Gamepedia.AdminGameController do
         from(g in Game,
           left_join: gg in "gamepedia_game_genre", on: gg.game_id == g.id,
           left_join: gen in "gamepedia_genres",    on: gen.id == gg.genre_id,
-          select: g, distinct: true
+          select: g, distinct: true,
+          preload: [:genres]
         )
 
       base = if search != "", do: where(base, [g], ilike(g.name, ^"%#{search}%")), else: base
@@ -137,10 +138,12 @@ defmodule Gamepedia.AdminGameController do
       games  = base |> offset((^page - 1) * ^limit) |> limit(^limit) |> Repo.all()
       genres = Repo.all(from g in "gamepedia_genres", order_by: g.name,
                         select: %{id: g.id, name: g.name, slug: g.slug})
-      years  =
-        Repo.all(from g in Game, where: not is_nil(g.first_release_date), select: g.first_release_date)
-        |> Enum.map(fn ts -> ts |> DateTime.from_unix!() |> Map.get(:year) end)
-        |> Enum.uniq() |> Enum.sort(:desc)
+
+      # Distinct release years computed in Postgres. This previously selected
+      # every game's first_release_date, converted each with DateTime.from_unix!
+      # and de-duplicated in Elixir — a full-table read on every admin page
+      # load. Gamepedia.Games.filter_options/0 already did it correctly in SQL.
+      years = Games.release_years()
 
       json(conn, %{
         data:    Enum.map(games, &game_summary_with_genres/1),
@@ -179,15 +182,15 @@ defmodule Gamepedia.AdminGameController do
     end)
   end
 
+  # Genres come from the query's preload rather than a per-game lookup. The
+  # previous version issued one genre query per row, so a 16-row admin page
+  # cost 16 extra round-trips.
   defp game_summary_with_genres(game) do
-    genres = Repo.all(from g in "gamepedia_genres",
-      join: gg in "gamepedia_game_genre", on: gg.genre_id == g.id,
-      where: gg.game_id == ^game.id,
-      select: %{id: g.id, name: g.name, slug: g.slug})
     %{
       id: game.id, igdb_id: game.igdb_id, name: game.name, slug: game.slug,
       cover_image_url: game.cover_image_url, developer: game.developer,
-      release_year: release_year(game.first_release_date), genres: genres,
+      release_year: release_year(game.first_release_date),
+      genres: Enum.map(game.genres, &%{id: &1.id, name: &1.name, slug: &1.slug}),
     }
   end
 end

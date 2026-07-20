@@ -49,6 +49,43 @@ defmodule Gamepedia.GamelogController do
   end
 
   # ---------------------------------------------------------------------------
+  # Membership check
+  #
+  # GET /gamelog/check?game_ids=1,2,3 -> %{data: %{"1" => true, "2" => false}}
+  #
+  # Callers showing an in-gamelog indicator for a handful of games used to
+  # fetch page one of the viewer's full gamelog and test membership against
+  # it. That listing is paginated at 16, so any game outside the first page
+  # reported as not-added — and it also triggered the (then expensive) stats
+  # computation as a side effect.
+  # ---------------------------------------------------------------------------
+
+  def check(conn, params) do
+    user_id = nexus_user_id(conn)
+
+    ids =
+      (params["game_ids"] || "")
+      |> String.split(",", trim: true)
+      |> Enum.map(&parse_int/1)
+      |> Enum.reject(&(&1 == 0))
+      |> Enum.uniq()
+      |> Enum.take(100)
+
+    cond do
+      user_id == 0 ->
+        # Not an error: logged-out visitors simply have nothing logged.
+        json(conn, %{data: %{}})
+
+      ids == [] ->
+        json(conn, %{data: %{}})
+
+      true ->
+        in_log = Gamelogs.game_ids_in_log(user_id, ids)
+        json(conn, %{data: Map.new(ids, &{Integer.to_string(&1), MapSet.member?(in_log, &1)})})
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Read actions — list someone's gamelog.
   #
   # Two index paths exist for the two contexts that naturally identify users
