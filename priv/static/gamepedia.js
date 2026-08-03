@@ -572,21 +572,21 @@
             e("div", { className: "gp-gl-stat-l" }, "Games")
           ),
           e("div", { className: "gp-gl-stat-card" },
-            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(52,211,153,.12)", color: "#34d399" } },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(52,211,153,.12)", color: "var(--green)" } },
               e("i", { className: "fa-solid fa-calendar", style: { fontSize: 13 } })
             ),
             e("div", { className: "gp-gl-stat-n" }, stats.added_this_month),
             e("div", { className: "gp-gl-stat-l" }, "This month")
           ),
           e("div", { className: "gp-gl-stat-card" },
-            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(96,165,250,.12)", color: "#60a5fa" } },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(96,165,250,.12)", color: "var(--blue)" } },
               e("i", { className: "fa-solid fa-tags", style: { fontSize: 13 } })
             ),
             e("div", { className: "gp-gl-stat-n" }, stats.top_genre ? stats.top_genre.name : "\u2014"),
             e("div", { className: "gp-gl-stat-l" }, "Top genre")
           ),
           e("div", { className: "gp-gl-stat-card" },
-            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(251,191,36,.12)", color: "#fbbf24" } },
+            e("div", { className: "gp-gl-stat-icon", style: { background: "rgba(251,191,36,.12)", color: "var(--amber)" } },
               e("i", { className: "fa-solid fa-clock-rotate-left", style: { fontSize: 13 } })
             ),
             e("div", { className: "gp-gl-stat-n" }, stats.oldest ? stats.oldest.name : "\u2014"),
@@ -1034,7 +1034,7 @@
         e("div", { className: "gp-detail-section-title" }, "Awards & recognition"),
         e("div", { className: "gp-detail-awards" },
           awards.map(a => e("div", { key: a.id, className: "gp-award" },
-            e("i", { className: "fa-solid fa-trophy", style: { color: "#fbbf24", marginRight: 8 } }),
+            e("i", { className: "fa-solid fa-trophy", style: { color: "var(--amber)", marginRight: 8 } }),
             e("strong", null, a.title),
             a.year && e("span", { className: "gp-award-year" }, " (" + a.year + ")")
           ))
@@ -2133,7 +2133,7 @@
 .gp-btn:hover{background:var(--s3);}
 .gp-btn:disabled{opacity:.5;cursor:not-allowed;}
 .gp-btn-active{background:var(--ac-bg);border-color:var(--ac-border);color:var(--ac);}
-.gp-btn-primary{background:var(--ac);border:0.5px solid var(--ac);border-radius:8px;color:#fff;cursor:pointer;font-size:13px;padding:7px 16px;font-family:inherit;transition:opacity .12s;}
+.gp-btn-primary{background:var(--ac);border:0.5px solid var(--ac);border-radius:8px;color:var(--ac-on);cursor:pointer;font-size:13px;padding:7px 16px;font-family:inherit;transition:opacity .12s;}
 .gp-btn-primary:hover{opacity:.9;}
 .gp-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
 .gp-btn-sm{background:var(--s2);border:0.5px solid var(--b3);border-radius:6px;color:var(--t2);cursor:pointer;font-size:11px;padding:5px 9px;font-family:inherit;transition:background .12s;display:inline-flex;align-items:center;gap:5px;}
